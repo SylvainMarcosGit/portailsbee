@@ -1,0 +1,14 @@
+@import '../js/styles/fonts.css';
+@import '../js/styles/tailwind.css';
+@import '../js/styles/theme.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.tsx';
+
+@theme {
+    --font-sans: 'Poppins', 'Gothic A1', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}

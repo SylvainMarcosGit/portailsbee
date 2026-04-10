@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+/* SBEE Custom Utilities */
+@layer utilities {
+  .font-poppins {
+    font-family: var(--font-poppins);
+  }
+  
+  .font-gothic {
+    font-family: var(--font-gothic);
+  }
+  
+  .bg-sbee-blue {
+    background-color: var(--sbee-blue);
+  }
+  
+  .bg-sbee-orange {
+    background-color: var(--sbee-orange);
+  }
+  
+  .bg-sbee-green {
+    background-color: var(--sbee-green);
+  }
+  
+  .bg-sbee-red {
+    background-color: var(--sbee-red);
+  }
+  
+  .text-sbee-blue {
+    color: var(--sbee-blue);
+  }
+  
+  .text-sbee-orange {
+    color: var(--sbee-orange);
+  }
+  
+  .text-sbee-green {
+    color: var(--sbee-green);
+  }
+  
+  .text-sbee-red {
+    color: var(--sbee-red);
+  }
+}
