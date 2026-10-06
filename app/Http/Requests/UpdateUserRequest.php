@@ -5,6 +5,11 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * Modification d'un compte par un administrateur.
+ * Nom, prénom, direction et poste viennent du RH (resync_rh=1 pour les
+ * rafraîchir) ; le mot de passe se réinitialise via reset-password.
+ */
 class UpdateUserRequest extends FormRequest
 {
     public function authorize(): bool
@@ -17,23 +22,20 @@ class UpdateUserRequest extends FormRequest
         $userId = $this->route('user')->id;
 
         return [
-            'matricule' => ['sometimes', 'string', 'max:50', Rule::unique('users', 'matricule')->ignore($userId)],
-            'nom' => ['sometimes', 'string', 'max:100'],
-            'prenom' => ['sometimes', 'string', 'max:100'],
-            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($userId)],
-            'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
+            'telephone' => ['sometimes', 'nullable', 'string', 'regex:/^01\d{8}$/'],
             'role_id' => ['sometimes', 'exists:roles,id'],
             'is_active' => ['sometimes', 'boolean'],
+            'resync_rh' => ['sometimes', 'boolean'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'matricule.unique' => 'Ce matricule existe déjà.',
             'email.email' => 'L\'email n\'est pas valide.',
             'email.unique' => 'Cet email existe déjà.',
-            'password.min' => 'Le mot de passe doit contenir au moins 8 caractères.',
+            'telephone.regex' => StoreUserRequest::MESSAGE_TELEPHONE,
             'role_id.exists' => 'Le rôle sélectionné n\'existe pas.',
         ];
     }

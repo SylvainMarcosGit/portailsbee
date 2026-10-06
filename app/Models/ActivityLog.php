@@ -13,6 +13,7 @@ class ActivityLog extends Model
 
     protected $fillable = [
         'user_id',
+        'application_id',
         'action',
         'description',
         'ip_address',
@@ -33,12 +34,21 @@ class ActivityLog extends Model
     }
 
     /**
+     * Relation avec l'application concernée (accès, etc.)
+     */
+    public function application()
+    {
+        return $this->belongsTo(Application::class);
+    }
+
+    /**
      * Enregistrer une nouvelle activité
      */
-    public static function log($action, $description = null)
+    public static function log($action, $description = null, $applicationId = null)
     {
         return self::create([
             'user_id' => auth()->id(),
+            'application_id' => $applicationId,
             'action' => $action,
             'description' => $description,
             'ip_address' => request()->ip(),

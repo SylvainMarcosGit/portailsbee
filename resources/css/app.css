@@ -9,6 +9,6 @@
 @source '../**/*.tsx';
 
 @theme {
-    --font-sans: 'Poppins', 'Gothic A1', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Poppins', 'Century Gothic', ui-sans-serif, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }

@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('url');
             $table->text('description')->nullable();
-            $table->string('category');
+            $table->foreignId('category_id')->constrained('categories')->restrictOnDelete();
             $table->string('logo')->nullable();
             $table->string('version')->default('1.0.0');
             $table->date('deployment_date');

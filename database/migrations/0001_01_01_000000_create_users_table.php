@@ -16,7 +16,10 @@ return new class extends Migration
             $table->string('matricule')->unique();
             $table->string('nom');
             $table->string('prenom');
-            $table->string('email')->unique();
+            $table->string('email')->nullable()->unique();
+            $table->string('telephone', 10)->nullable();
+            $table->string('direction')->nullable();
+            $table->string('titre_de_poste')->nullable();
             $table->string('password');
             $table->foreignId('role_id')->nullable()->constrained()->onDelete('set null');
             $table->boolean('is_active')->default(true);

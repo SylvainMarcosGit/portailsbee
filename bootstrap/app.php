@@ -1,9 +1,14 @@
 <?php
 
 use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\RequirePasswordChange;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,8 +20,28 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin' => AdminMiddleware::class,
+            'active' => EnsureUserIsActive::class,
+            'password.changed' => RequirePasswordChange::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Token absent, invalide ou expiré : 401 avec message en français
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Session expirée ou invalide. Veuillez vous reconnecter.',
+                ], 401);
+            }
+        });
+
+        // Trop de tentatives (ex. throttle sur /login) : 429 avec message en français
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $seconds = (int) ($e->getHeaders()['Retry-After'] ?? 60);
+
+                return response()->json([
+                    'message' => __('auth.throttle', ['seconds' => $seconds]),
+                ], 429, $e->getHeaders());
+            }
+        });
     })->create();

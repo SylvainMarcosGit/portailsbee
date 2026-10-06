@@ -1,19 +1,29 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi } from '@/services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { authApi, PASSWORD_CHANGE_REQUIRED_EVENT } from '@/services/api';
 import { toast } from 'sonner';
 
-interface User {
+export interface User {
   id: number;
   matricule: string;
   nom: string;
   prenom: string;
-  email: string;
+  email: string | null;
+  telephone?: string | null;
+  direction?: string | null;
+  titre_de_poste?: string | null;
+  needs_password_change?: boolean;
   role: {
     id: number;
     name: string;
     slug: string;
   };
   is_admin: boolean;
+  created_at?: string;
+}
+
+export interface LoginResult {
+  success: boolean;
+  message?: string;
 }
 
 interface AuthContextType {
@@ -21,8 +31,10 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (matricule: string, password: string) => Promise<boolean>;
+  login: (matricule: string, password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
+  updateUser: (user: User) => void;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,9 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  const login = async (matricule: string, password: string): Promise<boolean> => {
+  const login = async (matricule: string, password: string): Promise<LoginResult> => {
+    // Pas de setIsLoading ici : le chargement global remplacerait toute l'application
+    // (Toaster compris) et ferait perdre le message d'erreur. La page gère son propre état.
     try {
-      setIsLoading(true);
       const response = await authApi.login(matricule, password);
       const { token: newToken, user: newUser } = response.data;
 
@@ -70,10 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(newToken);
       setUser(newUser);
 
-      toast.success('Connexion réussie !');
-      return true;
+      return { success: true };
     } catch (error: any) {
-      let message = 'Erreur de connexion';
+      const status = error.response?.status;
+      let message = 'Connexion impossible. Vérifiez votre réseau puis réessayez.';
 
       if (error.response?.data) {
         message = error.response.data.message || message;
@@ -86,12 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             message = errors[firstField][0];
           }
         }
+      } else if (status && status >= 500) {
+        message = 'Le portail est momentanément indisponible. Réessayez dans un instant.';
       }
 
-      toast.error(message);
-      return false;
-    } finally {
-      setIsLoading(false);
+      return { success: false, message };
     }
   };
 
@@ -111,6 +123,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = (newUser: User) => {
+    localStorage.setItem('user', JSON.stringify(newUser));
+    setUser(newUser);
+  };
+
+  // Recharge l'utilisateur courant depuis /me (ex. après changement du mot de passe initial)
+  const refreshUser = useCallback(async (): Promise<User | null> => {
+    try {
+      const response = await authApi.me();
+      const freshUser: User | undefined = response.data?.user;
+      if (freshUser) {
+        localStorage.setItem('user', JSON.stringify(freshUser));
+        setUser(freshUser);
+        return freshUser;
+      }
+    } catch (error) {
+      console.error("Erreur lors du rafraîchissement de l'utilisateur:", error);
+    }
+    return null;
+  }, []);
+
+  // Le serveur a refusé une requête (403 requires_password_change) : afficher l'écran bloquant
+  useEffect(() => {
+    const handler = () => {
+      setUser((prev) => (prev && !prev.needs_password_change ? { ...prev, needs_password_change: true } : prev));
+    };
+    window.addEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, handler);
+    return () => window.removeEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, handler);
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -119,6 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user && !!token,
       login,
       logout,
+      updateUser,
+      refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

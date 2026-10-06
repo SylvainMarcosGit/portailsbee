@@ -8,14 +8,16 @@ import AccessDenied from '@/app/components/AccessDenied';
 import Analytics from '@/app/components/Analytics';
 import ApplicationManagement from '@/app/components/ApplicationManagement';
 import RoleManagement from '@/app/components/RoleManagement';
+import CategoryManagement from '@/app/components/CategoryManagement';
 import Sidebar from '@/app/components/Sidebar';
 import UserNavbar from '@/app/components/UserNavbar';
+import PasswordChangeRequired from '@/app/components/PasswordChangeRequired';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 // SBEE Portal - Portail Captif Centralisé
-type PageView = 'login' | 'dashboard' | 'user-dashboard' | 'user-management' | 'profile' | 'access-denied' | 'analytics' | 'app-management' | 'role-management';
+type PageView = 'login' | 'dashboard' | 'user-dashboard' | 'user-management' | 'profile' | 'access-denied' | 'analytics' | 'app-management' | 'role-management' | 'category-management';
 
 function AppContent() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
@@ -48,12 +50,22 @@ function AppContent() {
   // Afficher un loader pendant la vérification de l'authentification
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface-2">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#3b5998] mx-auto mb-4" />
-          <p className="text-gray-600">Chargement...</p>
+          <Loader2 className="w-10 h-10 animate-spin text-sbee-red mx-auto mb-4" />
+          <p className="text-muted-foreground">Vérification de votre session…</p>
         </div>
       </div>
+    );
+  }
+
+  // Première connexion (mot de passe initial) : écran bloquant à la place de tout le portail
+  if (isAuthenticated && user?.needs_password_change) {
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <PasswordChangeRequired />
+      </>
     );
   }
 
@@ -66,24 +78,31 @@ function AppContent() {
       case 'user-dashboard':
         return <SimpleUserDashboard />;
       case 'user-management':
-        return <UserManagement onBack={() => setCurrentPage('dashboard')} />;
+        return <UserManagement onBack={() => setCurrentPage('app-management')} />;
       case 'profile':
-        return <UserProfile onBack={() => userType === 'admin' ? setCurrentPage('dashboard') : setCurrentPage('user-dashboard')} />;
+        return <UserProfile onBack={() => userType === 'admin' ? setCurrentPage('app-management') : setCurrentPage('user-dashboard')} />;
       case 'access-denied':
-        return <AccessDenied onBack={() => setCurrentPage('dashboard')} />;
+        return <AccessDenied onBack={() => setCurrentPage('app-management')} />;
       case 'analytics':
-        return <Analytics onBack={() => setCurrentPage('dashboard')} />;
+        return <Analytics onBack={() => setCurrentPage('app-management')} />;
       case 'app-management':
-        return <ApplicationManagement onBack={() => setCurrentPage('dashboard')} />;
+        return (
+          <ApplicationManagement
+            onBack={() => setCurrentPage('app-management')}
+            onManageCategories={() => setCurrentPage('category-management')}
+          />
+        );
+      case 'category-management':
+        return <CategoryManagement onBack={() => setCurrentPage('app-management')} />;
       case 'role-management':
-        return <RoleManagement onBack={() => setCurrentPage('dashboard')} />;
+        return <RoleManagement onBack={() => setCurrentPage('app-management')} />;
       default:
         return userType === 'admin' ? <Dashboard /> : <SimpleUserDashboard />;
     }
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-surface-2">
       <Toaster position="top-right" richColors />
       
       {/* Sidebar - only shown for admin users and not on login page */}
@@ -110,8 +129,18 @@ function AppContent() {
         currentPage !== 'login' && userType === 'admin' && isAuthenticated
           ? (isSidebarOpen ? 'lg:ml-64' : 'lg:ml-20') 
           : ''
-      } transition-all duration-300`}>
-        {renderPage()}
+      } transition-[margin] duration-200 ease-[var(--ease-out)] flex flex-col min-h-screen`}>
+        <div className="flex-1">{renderPage()}</div>
+        {currentPage !== 'login' && isAuthenticated && (
+          <footer className="border-t border-border bg-surface">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between text-xs text-muted-foreground">
+              <p>
+                <span className="font-semibold text-foreground">La SBEE</span>, des femmes et des hommes à votre service 24h/24
+              </p>
+              <p>Portail des applications SBEE</p>
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   );

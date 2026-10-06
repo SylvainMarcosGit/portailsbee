@@ -48,6 +48,7 @@ class ActivityLogSeeder extends Seeder
                 
                 ActivityLog::create([
                     'user_id' => $user->id,
+                    'application_id' => $app->id,
                     'action' => 'access_application',
                     'description' => "Accès à l'application: " . $app->name,
                     'ip_address' => $this->getRandomIp(),

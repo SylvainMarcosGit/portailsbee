@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+    | API RH SBEE (JD Edwards / AIS) : recherche d'un employé par matricule
+    | lors de la création d'un compte. Aucune valeur par défaut secrète :
+    | tout doit venir du .env.
+    */
+    'jde' => [
+        'endpoint' => env('JDE_API_ENDPOINT'),
+        'username' => env('JDE_API_USERNAME'),
+        'password' => env('JDE_API_PASSWORD'),
+        'environnement' => env('JDE_API_ENVIRONNEMENT'),
+        'role' => env('JDE_API_ROLE'),
+    ],
+
 ];

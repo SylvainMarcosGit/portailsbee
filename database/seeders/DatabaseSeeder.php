@@ -14,8 +14,13 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             UserSeeder::class,
+            CategorySeeder::class,
             ApplicationSeeder::class,
-            ActivityLogSeeder::class,
         ]);
+
+        // Données d'activité fictives : uniquement en environnement local
+        if (app()->environment('local')) {
+            $this->call(ActivityLogSeeder::class);
+        }
     }
 }

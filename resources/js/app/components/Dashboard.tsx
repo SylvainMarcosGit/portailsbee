@@ -1,23 +1,20 @@
 import { useState, useEffect } from 'react';
 import {
   Search,
-  LogOut,
   Tag,
   Calendar,
   Building2,
-  CheckCircle,
   Zap,
-  Loader2,
-  ExternalLink
+  Loader2
 } from 'lucide-react';
 import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { applicationsApi, dashboardApi } from '@/services/api';
+import { applicationsApi } from '@/services/api';
 import { toast } from 'sonner';
 
-type AppCategory = 'Administration' | 'Technique' | 'Finances' | 'RH' | 'Tous';
+type AppCategory = string;
 
 interface Application {
   id: number;
@@ -33,43 +30,22 @@ interface Application {
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
+  const [selectedCategory, setSelectedCategory] = useState<AppCategory>('Tous');
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalApps: 0,
-    activeApps: 0,
-    todayLogins: 0
-  });
-
   // Charger les applications depuis l'API
   useEffect(() => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [appsResponse, statsResponse] = await Promise.all([
-          applicationsApi.getAllAdmin(),
-          dashboardApi.getAdminStats()
-        ]);
+        const appsResponse = await applicationsApi.getAllAdmin();
         const appsData = appsResponse.data?.applications || appsResponse.data || [];
         setApplications(Array.isArray(appsData) ? appsData : []);
-        
-        // Mapper les stats de l'API vers le format attendu
-        const apiStats = statsResponse.data?.stats || statsResponse.data;
-        if (apiStats) {
-          setStats({
-            totalUsers: apiStats.users?.total || 0,
-            totalApps: apiStats.applications?.total || 0,
-            activeApps: apiStats.applications?.active || 0,
-            todayLogins: apiStats.logins?.today || 0
-          });
-        }
       } catch (error) {
         console.error('Erreur lors du chargement:', error);
-        toast.error('Erreur lors du chargement des données');
+        toast.error('Impossible de charger les données pour le moment. Réessayez dans quelques instants.');
       } finally {
         setIsLoading(false);
       }
@@ -78,212 +54,161 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  const handleAppClick = (app: Application) => {
-    if (app.url) {
-      window.open(app.url, '_blank');
+  const handleAppClick = async (app: Application) => {
+    // Ouverture synchrone pour éviter le blocage des popups
+    const w = window.open('', '_blank');
+    try {
+      const res = await applicationsApi.accessApp(app.id);
+      if (w) {
+        w.opener = null;
+        w.location.href = res.data.url;
+      }
+    } catch (error: any) {
+      w?.close();
+      toast.error(error?.response?.data?.message || "Impossible d'ouvrir cette application.");
     }
-  };
-
-  // Générer les initiales de l'utilisateur
-  const getInitials = () => {
-    if (user?.prenom && user?.nom) {
-      return `${user.prenom[0]}${user.nom[0]}`.toUpperCase();
-    }
-    return 'US';
   };
 
   // Récupérer les catégories uniques disponibles
-  const availableCategories = ['Tous', ...new Set([...['Administration', 'Technique', 'Finances', 'RH'], ...applications.map(app => app.category)])].filter(Boolean);
+  const availableCategories: AppCategory[] = [
+    'Tous',
+    ...Array.from(new Set(applications.map(app => app.category).filter((c): c is string => !!c)))
+      .sort((a, b) => a.localeCompare(b, 'fr')),
+  ];
 
   const filteredApps = (applications || []).filter(app => {
     const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'Tous' ||
-      (app.category && app.category.toLowerCase() === selectedCategory.toLowerCase());
+      app.category === selectedCategory;
     const isActive = app.is_active === true;
     return matchesSearch && matchesCategory && isActive;
   });
 
-  const getCategoryColor = (category: string) => {
-    const normalizedCategory = category?.toLowerCase() || '';
-    if (normalizedCategory.includes('technique')) return 'bg-[#3b5998]';
-    if (normalizedCategory.includes('finance')) return 'bg-[#00cc66]';
-    if (normalizedCategory.includes('rh') || normalizedCategory.includes('ressources')) return 'bg-[#f9a825]';
-    if (normalizedCategory.includes('admin')) return 'bg-[#555555]';
-    return 'bg-[#3b5998]';
-  };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#3b5998] mx-auto mb-4" />
-          <p className="text-gray-600">Chargement des applications...</p>
+          <Loader2 className="w-10 h-10 animate-spin text-sbee-red mx-auto mb-4" />
+          <p className="text-muted-foreground">Chargement des applications…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo Section */}
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12">
-                  <img
-                    src="/images/logo.png"
-                    alt="SBEE"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-poppins)' }}>SBEE</h1>
-                  <p className="text-xs text-gray-500" style={{ fontFamily: 'var(--font-gothic)' }}>Portail des applications</p>
-                </div>
-              </div>
-            </div>
-
-            {/* User Section */}
-            <div className="flex items-center space-x-4">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  {user ? `${user.prenom} ${user.nom}` : 'Utilisateur'}
-                </p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
-              </div>
-              <div className="w-10 h-10 bg-[#3b5998] rounded-full flex items-center justify-center text-white font-semibold">
-                {user ? `${user.prenom?.[0] || ''}${user.nom?.[0] || ''}` : 'U'}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center space-x-2 hover:bg-red-50 hover:border-[#ed1f24] hover:text-[#ed1f24]"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Déconnexion</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-poppins)' }}>
-            Bienvenue, {user?.prenom || 'Utilisateur'} !
-          </h2>
-          <p className="text-gray-600" style={{ fontFamily: 'var(--font-gothic)' }}>
-            Accédez à vos applications et services SBEE
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Bandeau contexte (logo et déconnexion déjà présents dans la sidebar) */}
+      <div className="bg-surface border border-border rounded-lg rail-accent px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Bonjour {user?.prenom || 'et bienvenue'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            <span className="num">{filteredApps.length}</span>{' '}
+            {filteredApps.length > 1 ? 'applications actives affichées' : 'application active affichée'}
           </p>
         </div>
-
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <Input
-              type="text"
-              placeholder="Rechercher une application..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full"
-            />
-          </div>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" strokeWidth={1.5} />
+          <Input
+            type="text"
+            placeholder="Rechercher une application"
+            aria-label="Rechercher une application"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 w-full"
+          />
         </div>
+      </div>
 
-        {/* Category Filters */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2">
-            {availableCategories.map((category) => (
-              <Badge
-                key={category}
-                variant={selectedCategory === category ? "default" : "outline"}
-                className={`cursor-pointer px-4 py-2 transition-all ${selectedCategory === category
-                  ? 'bg-[#3b5998] hover:bg-[#2d4373] text-white'
-                  : 'hover:bg-gray-100'
-                  }`}
-                onClick={() => setSelectedCategory(category)}
-              >
-                {category}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Applications Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredApps.map((app) => (
-            <div
-              key={app.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 cursor-pointer group hover:-translate-y-1"
+      {/* Filtres de catégories */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer par catégorie">
+        {availableCategories.map((category) => {
+          const isActive = selectedCategory === category;
+          return (
+            <button
+              key={category}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => setSelectedCategory(category)}
+              className={`h-9 px-3 rounded-sm border text-sm transition-colors duration-[120ms] ${
+                isActive
+                  ? 'bg-foreground border-foreground text-white font-medium'
+                  : 'bg-surface border-border text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className="w-16 h-16 rounded-lg overflow-hidden mb-4 group-hover:scale-110 transition-transform duration-300 bg-gray-100 flex items-center justify-center">
-                {app.logo_url ? (
-                  <img src={app.logo_url} alt={app.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Zap className="w-8 h-8 text-[#3b5998]" />
-                )}
+              {category === 'Tous' ? 'Toutes' : category}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Grille d'applications */}
+      {filteredApps.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredApps.map((app) => (
+            <button
+              key={app.id}
+              type="button"
+              onClick={() => handleAppClick(app)}
+              className="group text-left bg-surface border border-border rounded-lg p-5 flex flex-col hover:border-sbee-red hover:-translate-y-0.5 transition-[transform,border-color] duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="w-12 h-12 rounded-sm overflow-hidden bg-surface-3 border border-border flex items-center justify-center flex-shrink-0">
+                  {app.logo_url ? (
+                    <img src={app.logo_url} alt="" className="w-full h-full object-contain" />
+                  ) : (
+                    <Zap className="w-6 h-6 text-muted-foreground" strokeWidth={1.5} />
+                  )}
+                </div>
+                {app.is_active && <Badge variant="success">Active</Badge>}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-poppins)' }}>
+              <h3 className="font-semibold text-foreground leading-snug">
                 {app.name}
               </h3>
-              <div className="flex items-center gap-2 mb-3">
-                <Badge variant="outline" className="text-xs">
-                  {app.category}
-                </Badge>
-                <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                  <Tag className="w-3 h-3" />
+              <div className="flex items-center gap-2 mt-2">
+                {app.category && <Badge variant="outline">{app.category}</Badge>}
+                <span className="text-xs text-muted-foreground num inline-flex items-center gap-1">
+                  <Tag className="w-3 h-3" strokeWidth={1.5} />
                   v{app.version}
-                </Badge>
+                </span>
               </div>
-              <div className="space-y-1.5 text-xs text-gray-500 mb-2">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3 h-3 flex-shrink-0" />
-                  <span className="line-clamp-1">{app.deployment_date ? new Date(app.deployment_date).toLocaleDateString('fr-FR') : 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="w-3 h-3 flex-shrink-0" />
-                  <span className="line-clamp-1">{app.developed_by || 'Non spécifié'}</span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 mt-2" style={{ fontFamily: 'var(--font-gothic)' }}>
+              <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
                 {app.description}
               </p>
-              {app.is_active && (
-                <div className="flex items-center mt-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-xs text-green-500 ml-1">Active</span>
+              <div className="mt-auto pt-4 space-y-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3 h-3 flex-shrink-0" strokeWidth={1.5} />
+                  <span className="line-clamp-1 num">{app.deployment_date ? new Date(app.deployment_date).toLocaleDateString('fr-FR') : 'Date non renseignée'}</span>
                 </div>
-              )}
-            </div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-3 h-3 flex-shrink-0" strokeWidth={1.5} />
+                  <span className="line-clamp-1">{app.developed_by || 'Éditeur non renseigné'}</span>
+                </div>
+              </div>
+            </button>
           ))}
         </div>
-
-        {/* No Results */}
-        {filteredApps.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <Search className="w-16 h-16 mx-auto" />
-            </div>
-            <h3 className="text-xl font-medium text-gray-900 mb-2">
-              Aucune application trouvée
-            </h3>
-            <p className="text-gray-500">
-              Essayez de modifier vos critères de recherche
-            </p>
-          </div>
-        )}
-      </main>
+      ) : (
+        /* État vide */
+        <div className="bg-surface border border-border rounded-lg px-6 py-16 text-center">
+          <Search className="w-10 h-10 mx-auto text-muted-foreground mb-4" strokeWidth={1.5} />
+          <p className="text-foreground font-medium">
+            Aucune application active ne correspond à votre recherche.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Modifiez le terme recherché ou choisissez une autre catégorie.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={() => { setSearchQuery(''); setSelectedCategory('Tous'); }}
+          >
+            Afficher toutes les applications
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

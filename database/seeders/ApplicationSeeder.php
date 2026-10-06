@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Application;
+use App\Models\Category;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 
@@ -101,15 +102,25 @@ class ApplicationSeeder extends Seeder
             ],
         ];
 
+        // Catégories (CategorySeeder doit être exécuté avant) : nom => id
+        $categoryIds = Category::pluck('id', 'name');
+
         foreach ($applications as $appData) {
             $roleSlugs = $appData['roles'];
-            unset($appData['roles']);
+            $categoryName = $appData['category'];
+            unset($appData['roles'], $appData['category']);
 
-            $app = Application::create($appData);
+            if (!isset($categoryIds[$categoryName])) {
+                throw new \RuntimeException("Catégorie introuvable: {$categoryName} (exécuter CategorySeeder avant ApplicationSeeder).");
+            }
+            $appData['category_id'] = $categoryIds[$categoryName];
 
-            // Attacher les rôles
-            $roles = Role::whereIn('slug', $roleSlugs)->get();
-            $app->roles()->attach($roles);
+            // Idempotent : pas de doublon si le seeder est relancé
+            $app = Application::firstOrCreate(['name' => $appData['name']], $appData);
+
+            // Attacher les rôles (sans doublon sur la clé unique application_id/role_id)
+            $roles = Role::whereIn('slug', $roleSlugs)->pluck('id');
+            $app->roles()->syncWithoutDetaching($roles);
         }
     }
 }

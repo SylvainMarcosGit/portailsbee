@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class Application extends Model
 {
@@ -14,7 +13,7 @@ class Application extends Model
         'name',
         'url',
         'description',
-        'category',
+        'category_id',
         'logo',
         'version',
         'deployment_date',
@@ -24,8 +23,16 @@ class Application extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
-        'deployment_date' => 'date',
+        'deployment_date' => 'date:Y-m-d',
     ];
+
+    /**
+     * Catégorie de l'application
+     */
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
 
     /**
      * Rôles autorisés pour cette application
@@ -37,12 +44,12 @@ class Application extends Model
     }
 
     /**
-     * URL complète du logo
+     * URL du logo (chemin relatif, indépendant de APP_URL)
      */
     public function getLogoUrlAttribute()
     {
         if ($this->logo) {
-            return Storage::url($this->logo);
+            return '/storage/' . ltrim($this->logo, '/');
         }
         return null;
     }
@@ -58,8 +65,20 @@ class Application extends Model
     /**
      * Scope par catégorie
      */
-    public function scopeByCategory($query, $category)
+    public function scopeByCategory($query, $categoryId)
     {
-        return $query->where('category', $category);
+        return $query->where('category_id', $categoryId);
+    }
+
+    /**
+     * Représentation API : attributs du modèle + `category` = nom de la catégorie
+     * (la relation `category` doit être chargée pour éviter le N+1)
+     */
+    public function toApiArray(): array
+    {
+        return array_merge($this->toArray(), [
+            'category_id' => $this->category_id,
+            'category' => $this->category?->name,
+        ]);
     }
 }

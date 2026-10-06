@@ -38,7 +38,8 @@ class RoleSeeder extends Seeder
         ];
 
         foreach ($roles as $role) {
-            Role::create($role);
+            // Idempotent : le slug est la clé unique
+            Role::updateOrCreate(['slug' => $role['slug']], $role);
         }
     }
 }

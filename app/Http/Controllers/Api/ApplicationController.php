@@ -19,9 +19,17 @@ class ApplicationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        
+
+        // Sans rôle : aucune application
+        if (!$user->role) {
+            return response()->json([
+                'applications' => [],
+            ]);
+        }
+
         // Récupérer les applications autorisées pour le rôle de l'utilisateur
         $applications = $user->role->applications()
+            ->with('category')
             ->where('is_active', true)
             ->get()
             ->map(function ($app) {
@@ -30,7 +38,8 @@ class ApplicationController extends Controller
                     'name' => $app->name,
                     'url' => $app->url,
                     'description' => $app->description,
-                    'category' => $app->category,
+                    'category' => $app->category?->name,
+                    'category_id' => $app->category_id,
                     'logo_url' => $app->logo_url,
                     'version' => $app->version,
                     'deployment_date' => $app->deployment_date?->format('Y-m-d'),
@@ -38,9 +47,6 @@ class ApplicationController extends Controller
                     'is_active' => $app->is_active,
                 ];
             });
-
-        // Enregistrer l'accès
-        ActivityLog::log('view_applications', 'Consultation de la liste des applications');
 
         return response()->json([
             'applications' => $applications,
@@ -52,7 +58,7 @@ class ApplicationController extends Controller
      */
     public function all(Request $request)
     {
-        $query = Application::with('roles');
+        $query = Application::with(['roles', 'category']);
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -62,8 +68,8 @@ class ApplicationController extends Controller
             });
         }
 
-        if ($request->has('category')) {
-            $query->where('category', $request->category);
+        if ($request->filled('category_id')) {
+            $query->byCategory($request->category_id);
         }
 
         $applications = $query->get()->map(function ($app) {
@@ -72,7 +78,8 @@ class ApplicationController extends Controller
                 'name' => $app->name,
                 'url' => $app->url,
                 'description' => $app->description,
-                'category' => $app->category,
+                'category' => $app->category?->name,
+                'category_id' => $app->category_id,
                 'logo_url' => $app->logo_url,
                 'version' => $app->version,
                 'deployment_date' => $app->deployment_date?->format('Y-m-d'),
@@ -99,18 +106,25 @@ class ApplicationController extends Controller
             $data['logo'] = $request->file('logo')->store('logos', 'public');
         }
 
+        // Version par défaut si non renseignée
+        if (empty($data['version'])) {
+            $data['version'] = '1.0.0';
+        }
+
+        unset($data['sync_roles'], $data['role_ids']);
+
         $application = Application::create($data);
 
-        // Attacher les rôles
-        if ($request->has('role_ids')) {
-            $application->roles()->attach($request->role_ids);
+        // Attribuer les rôles (sync_roles présent => la liste fait foi, même vide)
+        if ($request->has('sync_roles') || $request->has('role_ids')) {
+            $application->roles()->sync($request->input('role_ids') ?? []);
         }
 
         ActivityLog::log('create_application', "Application créée: {$application->name}");
 
         return response()->json([
             'message' => 'Application créée avec succès',
-            'application' => $application->load('roles'),
+            'application' => $application->load(['roles', 'category'])->toApiArray(),
         ], 201);
     }
 
@@ -119,16 +133,19 @@ class ApplicationController extends Controller
      */
     public function show(Application $application)
     {
+        $application->load(['roles', 'category']);
+
         return response()->json([
             'application' => [
                 'id' => $application->id,
                 'name' => $application->name,
                 'url' => $application->url,
                 'description' => $application->description,
-                'category' => $application->category,
+                'category' => $application->category?->name,
+                'category_id' => $application->category_id,
                 'logo' => $application->logo_url,
                 'version' => $application->version,
-                'deploymentDate' => $application->deployment_date->format('Y-m-d'),
+                'deploymentDate' => $application->deployment_date?->format('Y-m-d'),
                 'developedBy' => $application->developed_by,
                 'isActive' => $application->is_active,
                 'authorizedRoles' => $application->roles->pluck('name')->toArray(),
@@ -150,20 +167,30 @@ class ApplicationController extends Controller
                 Storage::disk('public')->delete($application->logo);
             }
             $data['logo'] = $request->file('logo')->store('logos', 'public');
+        } else {
+            // Ne pas écraser le logo existant si aucun fichier n'est envoyé
+            unset($data['logo']);
         }
+
+        // Version vidée => version par défaut
+        if (array_key_exists('version', $data) && empty($data['version'])) {
+            $data['version'] = '1.0.0';
+        }
+
+        unset($data['sync_roles'], $data['role_ids']);
 
         $application->update($data);
 
-        // Mettre à jour les rôles
-        if ($request->has('role_ids')) {
-            $application->roles()->sync($request->role_ids);
+        // Mettre à jour les rôles (sync_roles présent => la liste fait foi, même vide)
+        if ($request->has('sync_roles') || $request->has('role_ids')) {
+            $application->roles()->sync($request->input('role_ids') ?? []);
         }
 
         ActivityLog::log('update_application', "Application mise à jour: {$application->name}");
 
         return response()->json([
             'message' => 'Application mise à jour avec succès',
-            'application' => $application->load('roles'),
+            'application' => $application->load(['roles', 'category'])->toApiArray(),
         ]);
     }
 
@@ -215,20 +242,34 @@ class ApplicationController extends Controller
     {
         $user = $request->user();
 
-        // Vérifier que l'utilisateur a accès
-        $hasAccess = $user->role->applications()->where('applications.id', $application->id)->exists();
+        // Les administrateurs accèdent à toute application active (ouverture depuis le dashboard admin).
+        // Les autres : rôle requis et application attribuée à ce rôle.
+        $hasAccess = $user->isAdmin()
+            || ($user->role
+                && $user->role->applications()->where('applications.id', $application->id)->exists());
 
         if (!$hasAccess) {
             return response()->json([
-                'message' => 'Accès non autorisé à cette application',
+                'message' => "Vous n'avez pas accès à cette application.",
             ], 403);
         }
 
-        ActivityLog::log('access_application', "Accès à l'application: {$application->name}");
+        // Vérifier que l'application est active
+        if (!$application->is_active) {
+            return response()->json([
+                'message' => "Cette application est actuellement désactivée.",
+            ], 403);
+        }
+
+        ActivityLog::log('access_application', "Accès à l'application: {$application->name}", $application->id);
 
         return response()->json([
             'message' => 'Accès autorisé',
             'url' => $application->url,
+            'application' => [
+                'id' => $application->id,
+                'name' => $application->name,
+            ],
         ]);
     }
 }

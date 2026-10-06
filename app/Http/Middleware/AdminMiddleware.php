@@ -12,7 +12,7 @@ class AdminMiddleware
     {
         if (!$request->user() || !$request->user()->isAdmin()) {
             return response()->json([
-                'message' => 'Accès non autorisé. Vous devez être administrateur.',
+                'message' => 'Accès réservé aux administrateurs.',
             ], 403);
         }
 
