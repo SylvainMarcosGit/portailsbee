@@ -73,6 +73,43 @@ class User extends Authenticatable
     }
 
     /**
+     * Identifiants enregistrés dans le coffre (extension SBEE)
+     */
+    public function appCredentials()
+    {
+        return $this->hasMany(AppCredential::class);
+    }
+
+    /**
+     * Règle d'accès (cf. ApplicationController::access) : administrateur = toute application,
+     * sinon application attribuée au rôle de l'utilisateur
+     */
+    public function canAccessApplication(Application $application): bool
+    {
+        return $this->isAdmin()
+            || ($this->role
+                && $this->role->applications()->where('applications.id', $application->id)->exists());
+    }
+
+    /**
+     * Applications actives accessibles : administrateur = toutes, sinon attribuées au rôle
+     */
+    public function accessibleApplications()
+    {
+        $query = Application::query()->where('is_active', true);
+
+        if ($this->isAdmin()) {
+            return $query;
+        }
+
+        if (!$this->role_id) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('roles', fn ($q) => $q->where('roles.id', $this->role_id));
+    }
+
+    /**
      * Vérifier si l'utilisateur est administrateur
      */
     public function isAdmin()

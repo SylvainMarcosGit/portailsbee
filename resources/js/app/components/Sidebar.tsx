@@ -7,7 +7,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
-  Tags
+  Tags,
+  KeyRound
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 
@@ -26,6 +27,7 @@ export default function Sidebar({ currentPage, onNavigate, onLogout, isOpen, onT
     { id: 'category-management', label: 'Catégories', icon: Tags },
     { id: 'user-management', label: 'Utilisateurs', icon: Users },
     { id: 'role-management', label: 'Rôles et accès', icon: ShieldCheck },
+    { id: 'vault', label: 'Mes identifiants', icon: KeyRound },
     { id: 'profile', label: 'Mon profil', icon: User },
   ];
 

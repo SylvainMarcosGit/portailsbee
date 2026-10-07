@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authApi, PASSWORD_CHANGE_REQUIRED_EVENT } from '@/services/api';
+import { notifyExtensionLogout } from '@/services/extensionBridge';
 import { toast } from 'sonner';
 
 export interface User {
@@ -115,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     } finally {
+      // L'extension SBEE oublie son jeton (le serveur l'a aussi révoqué)
+      notifyExtensionLogout();
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       setUser(null);

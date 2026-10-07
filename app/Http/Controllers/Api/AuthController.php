@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureVaultExtensionToken;
 use App\Http\Requests\LoginRequest;
 use App\Models\ActivityLog;
 use App\Models\User;
@@ -63,8 +64,9 @@ class AuthController extends Controller
         // Enregistrer l'activité
         ActivityLog::log('logout', 'Déconnexion');
 
-        // Révoquer le token actuel
+        // Révoquer le token actuel et les jetons de l'extension SBEE
         $request->user()->currentAccessToken()->delete();
+        $request->user()->tokens()->where('name', EnsureVaultExtensionToken::TOKEN_NAME)->delete();
 
         return response()->json([
             'message' => 'Déconnexion réussie',
@@ -144,7 +146,7 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        // Révoquer les autres sessions (tous les tokens sauf le courant)
+        // Révoquer les autres sessions (tous les tokens sauf le courant, dont ceux de l'extension SBEE)
         $currentTokenId = $user->currentAccessToken()?->id;
         $user->tokens()
             ->when($currentTokenId, fn ($query) => $query->where('id', '!=', $currentTokenId))

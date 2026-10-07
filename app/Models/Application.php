@@ -19,6 +19,34 @@ class Application extends Model
         'deployment_date',
         'developed_by',
         'is_active',
+        'sso_mode',
+        'login_url_pattern',
+        'identifier_type',
+        'username_selector',
+        'password_selector',
+        'submit_selector',
+    ];
+
+    /**
+     * Modes de connexion par l'extension SBEE : aucun, remplissage, remplissage + validation
+     */
+    public const SSO_MODES = ['none', 'fill', 'fill_submit'];
+
+    /**
+     * Nature de l'identifiant attendu par l'application
+     */
+    public const IDENTIFIER_TYPES = ['email', 'matricule', 'username', 'autre'];
+
+    /**
+     * Champs du remplissage automatique (extension SBEE), renvoyés dans toutes les réponses application
+     */
+    public const SSO_FIELDS = [
+        'sso_mode',
+        'login_url_pattern',
+        'identifier_type',
+        'username_selector',
+        'password_selector',
+        'submit_selector',
     ];
 
     protected $casts = [
@@ -41,6 +69,27 @@ class Application extends Model
     {
         return $this->belongsToMany(Role::class, 'application_role')
                     ->withTimestamps();
+    }
+
+    /**
+     * Identifiants enregistrés par les utilisateurs (coffre)
+     */
+    public function credentials()
+    {
+        return $this->hasMany(AppCredential::class);
+    }
+
+    /**
+     * Champs du remplissage automatique (mode, motif d'URL, type d'identifiant, sélecteurs)
+     */
+    public function ssoAttributes(): array
+    {
+        $attributes = [];
+        foreach (self::SSO_FIELDS as $field) {
+            $attributes[$field] = $this->{$field};
+        }
+
+        return $attributes;
     }
 
     /**
@@ -76,7 +125,7 @@ class Application extends Model
      */
     public function toApiArray(): array
     {
-        return array_merge($this->toArray(), [
+        return array_merge($this->toArray(), $this->ssoAttributes(), [
             'category_id' => $this->category_id,
             'category' => $this->category?->name,
         ]);

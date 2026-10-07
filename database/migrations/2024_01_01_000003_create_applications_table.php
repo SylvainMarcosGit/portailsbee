@@ -19,6 +19,13 @@ return new class extends Migration
             $table->date('deployment_date');
             $table->string('developed_by');
             $table->boolean('is_active')->default(true);
+            // Coffre d'identifiants : remplissage automatique par l'extension SBEE
+            $table->enum('sso_mode', ['none', 'fill', 'fill_submit'])->default('none');
+            $table->string('login_url_pattern', 500)->nullable();
+            $table->enum('identifier_type', ['email', 'matricule', 'username', 'autre'])->default('username');
+            $table->string('username_selector')->nullable();
+            $table->string('password_selector')->nullable();
+            $table->string('submit_selector')->nullable();
             $table->timestamps();
         });
     }

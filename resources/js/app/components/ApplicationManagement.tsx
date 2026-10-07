@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Edit, Trash2, Search, ExternalLink, Package, CheckCircle, XCircle, Upload, Calendar, Building2, Tag, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Search, ExternalLink, Package, CheckCircle, XCircle, Upload, Calendar, Building2, Tag, Loader2, ChevronDown } from 'lucide-react';
 import { Button, buttonVariants } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -19,10 +19,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/app/components/ui/alert-dialog';
-import api, { applicationsApi, rolesApi, categoriesApi, type Category } from '@/services/api';
+import api, {
+  applicationsApi,
+  rolesApi,
+  categoriesApi,
+  type Category,
+  type SsoAttributes,
+  type SsoMode,
+  type IdentifierType,
+  SSO_MODE_LABELS,
+  IDENTIFIER_TYPE_LABELS,
+} from '@/services/api';
 import RequiredMark from '@/app/components/RequiredMark';
 
-interface Application {
+interface Application extends Partial<SsoAttributes> {
   id: number;
   name: string;
   url: string;
@@ -66,6 +76,7 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
   const [isSaving, setIsSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
+  const [showAdvancedSelectors, setShowAdvancedSelectors] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -77,6 +88,12 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
     version: '1.0.0',
     deployment_date: new Date().toISOString().split('T')[0],
     developed_by: '',
+    sso_mode: 'none' as SsoMode,
+    login_url_pattern: '',
+    identifier_type: 'username' as IdentifierType,
+    username_selector: '',
+    password_selector: '',
+    submit_selector: '',
   });
 
   useEffect(() => {
@@ -123,6 +140,16 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
     return matchesSearch && matchesCategory;
   });
 
+  // Connexion automatique (extension SBEE) : champs envoyés en création comme en édition
+  const appendSsoFields = (form: FormData) => {
+    form.append('sso_mode', formData.sso_mode);
+    form.append('identifier_type', formData.identifier_type);
+    form.append('login_url_pattern', formData.login_url_pattern.trim());
+    form.append('username_selector', formData.username_selector.trim());
+    form.append('password_selector', formData.password_selector.trim());
+    form.append('submit_selector', formData.submit_selector.trim());
+  };
+
   const handleAddApplication = async () => {
     setIsSaving(true);
     try {
@@ -135,6 +162,7 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
       form.append('deployment_date', formData.deployment_date);
       form.append('developed_by', formData.developed_by);
       form.append('is_active', formData.is_active ? '1' : '0');
+      appendSsoFields(form);
 
       if (logoFile) {
         form.append('logo', logoFile);
@@ -176,7 +204,14 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
       version: app.version || '1.0.0',
       deployment_date: app.deployment_date || new Date().toISOString().split('T')[0],
       developed_by: app.developed_by || '',
+      sso_mode: app.sso_mode || 'none',
+      login_url_pattern: app.login_url_pattern || '',
+      identifier_type: app.identifier_type || 'username',
+      username_selector: app.username_selector || '',
+      password_selector: app.password_selector || '',
+      submit_selector: app.submit_selector || '',
     });
+    setShowAdvancedSelectors(!!(app.username_selector || app.password_selector || app.submit_selector));
     setLogoPreview(app.logo_url || '');
 
     // Set selected roles from app.roles
@@ -204,6 +239,7 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
       form.append('deployment_date', formData.deployment_date);
       form.append('developed_by', formData.developed_by);
       form.append('is_active', formData.is_active ? '1' : '0');
+      appendSsoFields(form);
 
       if (logoFile) {
         form.append('logo', logoFile);
@@ -269,7 +305,14 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
       version: '1.0.0',
       deployment_date: new Date().toISOString().split('T')[0],
       developed_by: '',
+      sso_mode: 'none' as SsoMode,
+      login_url_pattern: '',
+      identifier_type: 'username' as IdentifierType,
+      username_selector: '',
+      password_selector: '',
+      submit_selector: '',
     });
+    setShowAdvancedSelectors(false);
     setLogoFile(null);
     setLogoPreview('');
     setSelectedRoleIds([]);
@@ -286,7 +329,8 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
     formData.url.trim() !== '' &&
     formData.category_id !== '' &&
     formData.developed_by.trim() !== '' &&
-    formData.deployment_date !== '';
+    formData.deployment_date !== '' &&
+    (formData.sso_mode === 'none' || formData.login_url_pattern.trim() !== '');
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -481,6 +525,120 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
           <p className="text-sm text-muted-foreground">Aucun rôle disponible.</p>
         )}
       </fieldset>
+
+      <fieldset className="space-y-4 border-t border-border pt-4">
+        <legend className="sr-only">Connexion automatique</legend>
+        <div>
+          <p className="text-sm font-medium text-foreground" aria-hidden="true">Connexion automatique</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            L'extension SBEE remplit la page de connexion avec les identifiants enregistrés par chaque agent.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`sso-mode${suffix}`}>Mode</Label>
+          <select
+            id={`sso-mode${suffix}`}
+            value={formData.sso_mode}
+            onChange={(e) => setFormData({ ...formData, sso_mode: e.target.value as SsoMode })}
+            className={selectClassName}
+          >
+            {(Object.keys(SSO_MODE_LABELS) as SsoMode[]).map((mode) => (
+              <option key={mode} value={mode}>
+                {SSO_MODE_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {formData.sso_mode !== 'none' && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor={`sso-login-url${suffix}`}>Adresse de la page de connexion<RequiredMark /></Label>
+              <Input
+                id={`sso-login-url${suffix}`}
+                aria-required="true"
+                required
+                maxLength={500}
+                value={formData.login_url_pattern}
+                onChange={(e) => setFormData({ ...formData, login_url_pattern: e.target.value })}
+                placeholder={withPlaceholders ? 'https://facturation.sbee.bj/login*' : undefined}
+                aria-describedby={`sso-login-url-hint${suffix}`}
+              />
+              <p id={`sso-login-url-hint${suffix}`} className="text-xs text-muted-foreground">
+                Utilisez * comme joker, ex. https://facturation.sbee.bj/login*
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`sso-identifier-type${suffix}`}>Type d'identifiant</Label>
+              <select
+                id={`sso-identifier-type${suffix}`}
+                value={formData.identifier_type}
+                onChange={(e) => setFormData({ ...formData, identifier_type: e.target.value as IdentifierType })}
+                className={selectClassName}
+              >
+                {(Object.keys(IDENTIFIER_TYPE_LABELS) as IdentifierType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {IDENTIFIER_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="border border-border rounded-sm">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedSelectors((v) => !v)}
+                aria-expanded={showAdvancedSelectors}
+                aria-controls={`sso-advanced${suffix}`}
+                className="w-full h-11 px-3 flex items-center justify-between text-sm font-medium text-foreground hover:bg-surface-2 transition-colors duration-[120ms]"
+              >
+                Sélecteurs avancés
+                <ChevronDown
+                  className={`w-4 h-4 text-muted-foreground transition-transform duration-[120ms] ${showAdvancedSelectors ? 'rotate-180' : ''}`}
+                  strokeWidth={1.5}
+                />
+              </button>
+              {showAdvancedSelectors && (
+                <div id={`sso-advanced${suffix}`} className="border-t border-border p-3 space-y-4">
+                  <p className="text-xs text-muted-foreground">Laissez vide : l'extension détecte le formulaire.</p>
+                  <div className="space-y-2">
+                    <Label htmlFor={`sso-username-selector${suffix}`}>Champ identifiant</Label>
+                    <Input
+                      id={`sso-username-selector${suffix}`}
+                      maxLength={255}
+                      value={formData.username_selector}
+                      onChange={(e) => setFormData({ ...formData, username_selector: e.target.value })}
+                      placeholder={withPlaceholders ? 'Ex. : #username' : undefined}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`sso-password-selector${suffix}`}>Champ mot de passe</Label>
+                    <Input
+                      id={`sso-password-selector${suffix}`}
+                      maxLength={255}
+                      value={formData.password_selector}
+                      onChange={(e) => setFormData({ ...formData, password_selector: e.target.value })}
+                      placeholder={withPlaceholders ? 'Ex. : input[name=password]' : undefined}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`sso-submit-selector${suffix}`}>Bouton de connexion</Label>
+                    <Input
+                      id={`sso-submit-selector${suffix}`}
+                      maxLength={255}
+                      value={formData.submit_selector}
+                      onChange={(e) => setFormData({ ...formData, submit_selector: e.target.value })}
+                      placeholder={withPlaceholders ? 'Ex. : button[type=submit]' : undefined}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </fieldset>
     </div>
   );
 
@@ -611,7 +769,12 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-foreground truncate">{app.name}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-foreground truncate">{app.name}</p>
+                            {app.sso_mode && app.sso_mode !== 'none' && (
+                              <Badge variant="outline" className="flex-shrink-0">Remplissage auto</Badge>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
                             {app.description || 'Sans description'}
                           </p>

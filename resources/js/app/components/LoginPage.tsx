@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Lock, User, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, Loader2, ShieldCheck, AlertCircle, Check } from 'lucide-react';
 import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Label } from '@/app/components/ui/label';
@@ -153,39 +153,47 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       {/* Panneau de marque */}
       <aside className="hidden lg:flex w-[44%] relative overflow-hidden bg-sbee-red text-white">
+        {/* Photo du réseau sous un voile rouge SBEE léger ; le texte porte une ombre pour rester lisible */}
+        <img
+          src="/images/pylone-haute-tension.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-sbee-red/45" aria-hidden="true" />
+        {/* Fondus sombres localisés : lisibilité du texte sans masquer le pylône au centre */}
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/45 to-transparent" aria-hidden="true" />
+        <div className="absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-black/80 via-black/45 to-transparent" aria-hidden="true" />
         {/*
           Trame de marque : déposer ici le fichier officiel de la trame SBEE
           (symbole du logo en motif, opacité 5-10 %). Ne pas redessiner le symbole.
           <img src="/images/trame-sbee.svg" alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover opacity-[0.08]" />
         */}
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-          <p className="text-sm font-medium tracking-wide opacity-90">
+        <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/90">
             Société Béninoise d'Énergie Électrique
           </p>
 
-          <div>
-            <h2 className="text-4xl font-semibold leading-tight max-w-md">
+          <div className="max-w-lg">
+            <span className="block h-[3px] w-12 bg-white mb-6" aria-hidden="true" />
+            <h2 className="text-[2.75rem] xl:text-5xl font-semibold leading-[1.08] tracking-[-0.02em] [text-wrap:balance]">
               Toutes vos applications métier, une seule connexion.
             </h2>
-            <ul className="mt-8 space-y-3 text-base max-w-md">
-              <li className="flex gap-3">
-                <span className="mt-2.5 h-px w-6 bg-white flex-shrink-0" />
-                Facturation, maintenance, paie : accès selon votre rôle
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2.5 h-px w-6 bg-white flex-shrink-0" />
+            <ul className="mt-8 space-y-3 text-[1.0625rem] leading-snug text-white/95">
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 mt-0.5 flex-shrink-0" strokeWidth={2.25} aria-hidden="true" />
                 Un seul matricule pour l'ensemble des services
               </li>
-              <li className="flex gap-3">
-                <span className="mt-2.5 h-px w-6 bg-white flex-shrink-0" />
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 mt-0.5 flex-shrink-0" strokeWidth={2.25} aria-hidden="true" />
                 Chaque connexion est journalisée
               </li>
             </ul>
-          </div>
 
-          <p className="text-sm font-medium border-t border-white/30 pt-4">
-            La SBEE, des femmes et des hommes à votre service 24h/24
-          </p>
+            <p className="mt-12 inline-flex items-center bg-sbee-red px-4 py-2.5 text-sm font-semibold rounded-sm [text-shadow:none]">
+              La SBEE, des femmes et des hommes à votre service 24h/24
+            </p>
+          </div>
         </div>
       </aside>
     </div>

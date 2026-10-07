@@ -1,0 +1,26 @@
+{
+  "name": "sbee-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Extension navigateur SBEE - remplissage des connexions à partir du coffre du portail",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/icons.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "node scripts/build.mjs && node scripts/package.mjs"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/webextension-polyfill": "^0.12.1",
+    "archiver": "^7.0.1",
+    "esbuild": "^0.24.0",
+    "happy-dom": "^15.11.7",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

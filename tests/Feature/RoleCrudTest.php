@@ -69,7 +69,7 @@ class RoleCrudTest extends TestCase
     {
         $app1 = $this->makeApplication('Paie');
         $app2 = $this->makeApplication('Stock');
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->postJson('/api/roles', [
             'name' => 'Chef de Projet',
@@ -92,7 +92,7 @@ class RoleCrudTest extends TestCase
 
     public function test_index_expose_is_system(): void
     {
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $roles = collect($this->getJson('/api/roles')->assertOk()->json('data'))->keyBy('slug');
 
@@ -103,7 +103,7 @@ class RoleCrudTest extends TestCase
 
     public function test_nom_en_double_refuse(): void
     {
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->postJson('/api/roles', ['name' => 'Utilisateur'])
             ->assertStatus(422)
@@ -112,7 +112,7 @@ class RoleCrudTest extends TestCase
 
     public function test_nom_similaire_refuse(): void
     {
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->postJson('/api/roles', ['name' => 'utilisateur!'])
             ->assertStatus(422)
@@ -129,7 +129,7 @@ class RoleCrudTest extends TestCase
     {
         $role = Role::create(['name' => 'Comptable']);
         $this->assertSame('comptable', $role->slug);
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->putJson("/api/roles/{$role->id}", ['name' => 'Comptable Principal', 'description' => 'Finances'])
             ->assertOk()
@@ -143,7 +143,7 @@ class RoleCrudTest extends TestCase
 
     public function test_role_admin_slug_inchange_et_non_supprimable(): void
     {
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->putJson("/api/roles/{$this->adminRole->id}", ['name' => 'Super Admin', 'description' => 'Tout'])
             ->assertOk()
@@ -165,7 +165,7 @@ class RoleCrudTest extends TestCase
     {
         $this->makeUser('USER001', $this->userRole);
         $this->makeUser('USER002', $this->userRole);
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->deleteJson("/api/roles/{$this->userRole->id}")
             ->assertStatus(422)
@@ -179,7 +179,7 @@ class RoleCrudTest extends TestCase
         $app = $this->makeApplication('Paie');
         $role = Role::create(['name' => 'Temporaire']);
         $role->applications()->sync([$app->id]);
-        Sanctum::actingAs($this->admin);
+        Sanctum::actingAs($this->admin, ['*']);
 
         $this->deleteJson("/api/roles/{$role->id}")
             ->assertOk()
@@ -193,7 +193,7 @@ class RoleCrudTest extends TestCase
 
     public function test_non_admin_interdit(): void
     {
-        Sanctum::actingAs($this->makeUser('USER001', $this->userRole));
+        Sanctum::actingAs($this->makeUser('USER001', $this->userRole), ['*']);
 
         $this->postJson('/api/roles', ['name' => 'Pirate'])->assertStatus(403);
         $this->putJson("/api/roles/{$this->userRole->id}", ['name' => 'Pirate'])->assertStatus(403);

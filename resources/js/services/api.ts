@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notifyExtensionLogout } from '@/services/extensionBridge';
 
 const api = axios.create({
   baseURL: '/api',
@@ -33,6 +34,7 @@ api.interceptors.response.use(
     }
     const isLoginRequest = (error.config?.url || '').endsWith('/login');
     if (error.response?.status === 401 && !isLoginRequest) {
+      notifyExtensionLogout();
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       window.location.href = '/';
@@ -59,6 +61,49 @@ export const authApi = {
 export const profileApi = {
   update: (data: { email: string }) => api.put('/profile', data),
 };
+
+// Connexion automatique (extension SBEE)
+export type SsoMode = 'none' | 'fill' | 'fill_submit';
+export type IdentifierType = 'email' | 'matricule' | 'username' | 'autre';
+
+export const SSO_MODE_LABELS: Record<SsoMode, string> = {
+  none: 'Désactivée',
+  fill: 'Remplir les champs',
+  fill_submit: 'Remplir et valider',
+};
+
+export const IDENTIFIER_TYPE_LABELS: Record<IdentifierType, string> = {
+  email: 'E-mail',
+  matricule: 'Matricule',
+  username: "Nom d'utilisateur",
+  autre: 'Identifiant',
+};
+
+export interface SsoAttributes {
+  sso_mode: SsoMode;
+  login_url_pattern: string | null;
+  identifier_type: IdentifierType;
+  username_selector: string | null;
+  password_selector: string | null;
+  submit_selector: string | null;
+}
+
+export interface Application extends SsoAttributes {
+  id: number;
+  name: string;
+  url: string;
+  description: string | null;
+  category: string | null;
+  category_id: number | null;
+  logo_url: string | null;
+  version: string | null;
+  deployment_date: string | null;
+  developed_by: string | null;
+  is_active: boolean;
+  /** Lanceur (GET /applications) uniquement : identifiants présents dans le coffre */
+  has_credential?: boolean;
+  roles?: Array<{ id: number; name: string }>;
+}
 
 // Applications API
 export const applicationsApi = {
@@ -203,6 +248,46 @@ export const rolesApi = {
 export const dashboardApi = {
   getAdminStats: () => api.get('/dashboard/admin'),
   getUserStats: () => api.get('/dashboard/user'),
+};
+
+// Coffre d'identifiants API (jamais de secret en lecture)
+export interface VaultApplication {
+  application_id: number;
+  name: string;
+  url: string;
+  logo_url: string | null;
+  category: string | null;
+  sso_mode: SsoMode;
+  identifier_type: IdentifierType;
+  has_credential: boolean;
+  login_identifier: string | null;
+  last_used_at: string | null;
+}
+
+export interface VaultCredential {
+  application_id: number;
+  login_identifier: string;
+  last_used_at: string | null;
+}
+
+export interface VaultSavePayload {
+  login_identifier: string;
+  secret: string;
+}
+
+export interface ExtensionTokenResponse {
+  token: string;
+  expires_at: string;
+  api_base: string;
+}
+
+export const vaultApi = {
+  list: () => api.get<{ applications: VaultApplication[] }>('/vault'),
+  save: (appId: number, data: VaultSavePayload) =>
+    api.put<{ message: string; credential: VaultCredential }>(`/vault/${appId}`, data),
+  remove: (appId: number) => api.delete<{ message: string }>(`/vault/${appId}`),
+  extensionToken: (instanceId?: string | null) =>
+    api.post<ExtensionTokenResponse>('/vault/extension-token', instanceId ? { instance_id: instanceId } : {}),
 };
 
 // Activity Logs API

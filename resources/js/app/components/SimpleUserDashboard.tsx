@@ -4,13 +4,15 @@ import {
   LayoutGrid,
   Loader2,
   ExternalLink,
-  PackageOpen
+  PackageOpen,
+  Puzzle
 } from 'lucide-react';
 import { Input } from '@/app/components/ui/input';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { applicationsApi } from '@/services/api';
+import { applicationsApi, type SsoMode } from '@/services/api';
+import { useExtensionStatus } from '@/services/extensionBridge';
 import { toast } from 'sonner';
 
 type AppCategory = string;
@@ -26,10 +28,17 @@ interface Application {
   deployment_date: string;
   developed_by: string;
   is_active: boolean;
+  sso_mode?: SsoMode;
+  has_credential?: boolean;
 }
 
-export default function SimpleUserDashboard() {
+interface SimpleUserDashboardProps {
+  onInstallExtension?: () => void;
+}
+
+export default function SimpleUserDashboard({ onInstallExtension }: SimpleUserDashboardProps = {}) {
   const { user } = useAuth();
+  const { status: extensionStatus } = useExtensionStatus();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<AppCategory>('Tous');
   const [applications, setApplications] = useState<Application[]>([]);
@@ -83,6 +92,7 @@ export default function SimpleUserDashboard() {
   });
 
   const appCount = applications.length;
+  const hasAutoFillApps = applications.some(app => app.sso_mode && app.sso_mode !== 'none');
   const roleName = user?.role?.name;
 
   if (isLoading) {
@@ -151,6 +161,21 @@ export default function SimpleUserDashboard() {
         </div>
       ) : (
         <>
+          {/* Extension SBEE absente : connexions non préremplies */}
+          {extensionStatus === 'absent' && hasAutoFillApps && (
+            <div className="bg-surface border border-border rounded-lg px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <p className="flex items-start gap-3 text-sm text-muted-foreground">
+                <Puzzle className="w-5 h-5 flex-shrink-0" strokeWidth={1.5} />
+                Installez l'extension SBEE pour que vos connexions soient préremplies.
+              </p>
+              {onInstallExtension && (
+                <Button variant="outline" onClick={onInstallExtension} className="sm:self-center">
+                  Installer l'extension
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Filtres de catégories */}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer par catégorie">
             {categories.map((category) => {
@@ -197,10 +222,21 @@ export default function SimpleUserDashboard() {
                   <h3 className="font-semibold text-foreground leading-snug">
                     {app.name}
                   </h3>
-                  {app.category && (
-                    <Badge variant="outline" className="mt-2">
-                      {app.category}
-                    </Badge>
+                  {(app.category || (app.sso_mode && app.sso_mode !== 'none')) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {app.category && (
+                        <Badge variant="outline">
+                          {app.category}
+                        </Badge>
+                      )}
+                      {app.sso_mode && app.sso_mode !== 'none' && (
+                        app.has_credential ? (
+                          <Badge variant="success">Identifiants enregistrés</Badge>
+                        ) : (
+                          <Badge variant="outline">Identifiants à enregistrer</Badge>
+                        )
+                      )}
+                    </div>
                   )}
                   <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
                     {app.description}

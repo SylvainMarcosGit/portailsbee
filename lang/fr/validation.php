@@ -103,6 +103,14 @@ return [
         'application_ids' => 'applications',
         'application_ids.*' => 'application',
         'sync_roles' => 'synchronisation des rôles',
+        'sso_mode' => 'mode de connexion',
+        'login_url_pattern' => 'URL de la page de connexion',
+        'identifier_type' => "type d'identifiant",
+        'username_selector' => 'sélecteur du champ identifiant',
+        'password_selector' => 'sélecteur du champ mot de passe',
+        'submit_selector' => 'sélecteur du bouton de connexion',
+        'login_identifier' => 'identifiant',
+        'secret' => 'mot de passe',
     ],
 
 ];

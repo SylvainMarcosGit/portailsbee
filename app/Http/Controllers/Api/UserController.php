@@ -185,7 +185,14 @@ class UserController extends Controller
             $data['titre_de_poste'] = $employe['titre_de_poste'] ?: null;
         }
 
+        $wasActive = $user->is_active;
+
         $user->update($data);
+
+        // Un compte désactivé perd immédiatement toutes ses sessions (portail et extension SBEE)
+        if ($wasActive && !$user->is_active) {
+            $user->tokens()->delete();
+        }
 
         ActivityLog::log('update_user', "Utilisateur mis à jour: {$user->matricule}");
 
@@ -211,6 +218,7 @@ class UserController extends Controller
             'password' => Hash::make(User::MOT_DE_PASSE_INITIAL),
         ])->save();
 
+        // Révoquer toutes les sessions (portail et extension SBEE)
         $user->tokens()->delete();
 
         ActivityLog::log('reset_password', "Mot de passe réinitialisé: {$user->matricule}");
@@ -230,6 +238,9 @@ class UserController extends Controller
         }
 
         $matricule = $user->matricule;
+
+        // Révoquer toutes les sessions (portail et extension SBEE) ; le coffre est supprimé en cascade
+        $user->tokens()->delete();
         $user->delete();
 
         ActivityLog::log('delete_user', "Utilisateur supprimé: {$matricule}");
@@ -252,7 +263,7 @@ class UserController extends Controller
 
         $user->update(['is_active' => !$user->is_active]);
 
-        // Un compte désactivé perd immédiatement toutes ses sessions
+        // Un compte désactivé perd immédiatement toutes ses sessions (portail et extension SBEE)
         if (!$user->is_active) {
             $user->tokens()->delete();
         }

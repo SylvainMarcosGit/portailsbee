@@ -27,13 +27,16 @@ class ApplicationController extends Controller
             ]);
         }
 
+        // Applications pour lesquelles l'utilisateur a des identifiants dans le coffre
+        $credentialAppIds = $user->appCredentials()->pluck('application_id')->flip();
+
         // Récupérer les applications autorisées pour le rôle de l'utilisateur
         $applications = $user->role->applications()
             ->with('category')
             ->where('is_active', true)
             ->get()
-            ->map(function ($app) {
-                return [
+            ->map(function ($app) use ($credentialAppIds) {
+                return array_merge([
                     'id' => $app->id,
                     'name' => $app->name,
                     'url' => $app->url,
@@ -45,7 +48,9 @@ class ApplicationController extends Controller
                     'deployment_date' => $app->deployment_date?->format('Y-m-d'),
                     'developed_by' => $app->developed_by,
                     'is_active' => $app->is_active,
-                ];
+                ], $app->ssoAttributes(), [
+                    'has_credential' => $credentialAppIds->has($app->id),
+                ]);
             });
 
         return response()->json([
@@ -73,7 +78,7 @@ class ApplicationController extends Controller
         }
 
         $applications = $query->get()->map(function ($app) {
-            return [
+            return array_merge([
                 'id' => $app->id,
                 'name' => $app->name,
                 'url' => $app->url,
@@ -86,7 +91,7 @@ class ApplicationController extends Controller
                 'developed_by' => $app->developed_by,
                 'is_active' => $app->is_active,
                 'roles' => $app->roles,
-            ];
+            ], $app->ssoAttributes());
         });
 
         return response()->json([
@@ -110,6 +115,10 @@ class ApplicationController extends Controller
         if (empty($data['version'])) {
             $data['version'] = '1.0.0';
         }
+
+        // Remplissage automatique : valeurs par défaut si non renseignées
+        $data['sso_mode'] = $data['sso_mode'] ?? 'none';
+        $data['identifier_type'] = $data['identifier_type'] ?? 'username';
 
         unset($data['sync_roles'], $data['role_ids']);
 
@@ -136,7 +145,7 @@ class ApplicationController extends Controller
         $application->load(['roles', 'category']);
 
         return response()->json([
-            'application' => [
+            'application' => array_merge([
                 'id' => $application->id,
                 'name' => $application->name,
                 'url' => $application->url,
@@ -149,7 +158,7 @@ class ApplicationController extends Controller
                 'developedBy' => $application->developed_by,
                 'isActive' => $application->is_active,
                 'authorizedRoles' => $application->roles->pluck('name')->toArray(),
-            ],
+            ], $application->ssoAttributes()),
         ]);
     }
 
@@ -175,6 +184,14 @@ class ApplicationController extends Controller
         // Version vidée => version par défaut
         if (array_key_exists('version', $data) && empty($data['version'])) {
             $data['version'] = '1.0.0';
+        }
+
+        // Mode ou type d'identifiant vidé => valeur par défaut
+        if (array_key_exists('sso_mode', $data) && empty($data['sso_mode'])) {
+            $data['sso_mode'] = 'none';
+        }
+        if (array_key_exists('identifier_type', $data) && empty($data['identifier_type'])) {
+            $data['identifier_type'] = 'username';
         }
 
         unset($data['sync_roles'], $data['role_ids']);
@@ -227,11 +244,11 @@ class ApplicationController extends Controller
 
         return response()->json([
             'message' => "Application {$status} avec succès",
-            'application' => [
+            'application' => array_merge([
                 'id' => $application->id,
                 'name' => $application->name,
                 'is_active' => $application->is_active,
-            ],
+            ], $application->ssoAttributes()),
         ]);
     }
 

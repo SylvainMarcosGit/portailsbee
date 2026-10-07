@@ -12,12 +12,15 @@ import CategoryManagement from '@/app/components/CategoryManagement';
 import Sidebar from '@/app/components/Sidebar';
 import UserNavbar from '@/app/components/UserNavbar';
 import PasswordChangeRequired from '@/app/components/PasswordChangeRequired';
+import VaultPage from '@/app/components/VaultPage';
+import ExtensionInstall from '@/app/components/ExtensionInstall';
+import { useExtensionBridge } from '@/hooks/useExtensionBridge';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 // SBEE Portal - Portail Captif Centralisé
-type PageView = 'login' | 'dashboard' | 'user-dashboard' | 'user-management' | 'profile' | 'access-denied' | 'analytics' | 'app-management' | 'role-management' | 'category-management';
+type PageView = 'login' | 'dashboard' | 'user-dashboard' | 'user-management' | 'profile' | 'access-denied' | 'analytics' | 'app-management' | 'role-management' | 'category-management' | 'vault' | 'extension-install';
 
 function AppContent() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
@@ -26,6 +29,10 @@ function AppContent() {
 
   // Déterminer le type d'utilisateur
   const userType = user?.is_admin ? 'admin' : 'user';
+  const homePage: PageView = userType === 'admin' ? 'app-management' : 'user-dashboard';
+
+  // Pont avec l'extension SBEE : jeton du coffre transmis seulement après le changement du mot de passe initial
+  useExtensionBridge(isAuthenticated && !!user && !user.needs_password_change);
 
   // Rediriger après connexion/déconnexion
   useEffect(() => {
@@ -76,7 +83,21 @@ function AppContent() {
       case 'dashboard':
         return <Dashboard />;
       case 'user-dashboard':
-        return <SimpleUserDashboard />;
+        return <SimpleUserDashboard onInstallExtension={() => setCurrentPage('extension-install')} />;
+      case 'vault':
+        return (
+          <VaultPage
+            onBack={() => setCurrentPage(homePage)}
+            onInstallExtension={() => setCurrentPage('extension-install')}
+          />
+        );
+      case 'extension-install':
+        return (
+          <ExtensionInstall
+            onBack={() => setCurrentPage(homePage)}
+            onOpenVault={() => setCurrentPage('vault')}
+          />
+        );
       case 'user-management':
         return <UserManagement onBack={() => setCurrentPage('app-management')} />;
       case 'profile':

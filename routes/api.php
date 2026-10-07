@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\VaultController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,8 +19,8 @@ use Illuminate\Support\Facades\Route;
 // Routes publiques (5 tentatives de connexion par minute)
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
-// Routes protégées (token valide + compte actif)
-Route::middleware(['auth:sanctum', 'active'])->group(function () {
+// Routes protégées (token du portail '*' + compte actif) : un jeton d'extension SBEE y est refusé
+Route::middleware(['auth:sanctum', 'active', 'abilities:*'])->group(function () {
 
     // Accessibles même avec le mot de passe initial (première connexion)
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -41,6 +42,12 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         // Catégories - Lecture (tout utilisateur connecté)
         Route::get('/categories', [CategoryController::class, 'index']);
+
+        // Coffre d'identifiants - gestion depuis le portail
+        Route::get('/vault', [VaultController::class, 'index']);
+        Route::post('/vault/extension-token', [VaultController::class, 'extensionToken']);
+        Route::put('/vault/{application}', [VaultController::class, 'update'])->whereNumber('application');
+        Route::delete('/vault/{application}', [VaultController::class, 'destroy'])->whereNumber('application');
 
         // Routes réservées aux administrateurs
         Route::middleware('admin')->group(function () {
@@ -88,3 +95,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
     });
 });
+
+// Coffre d'identifiants - extension SBEE (jeton sbee-extension, ability vault ; jeton du portail refusé)
+Route::middleware(['auth:sanctum', 'active', 'password.changed', 'vault.extension'])
+    ->prefix('vault/ext')
+    ->group(function () {
+        Route::get('/config', [VaultController::class, 'extensionConfig']);
+        Route::post('/logout', [VaultController::class, 'extensionLogout']);
+        Route::post('/{application}/reveal', [VaultController::class, 'reveal'])
+            ->whereNumber('application')
+            ->middleware('throttle:30,1');
+        Route::put('/{application}', [VaultController::class, 'extensionUpdate'])->whereNumber('application');
+    });

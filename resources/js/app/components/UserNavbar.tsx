@@ -1,4 +1,4 @@
-import { User, ChevronDown, LogOut } from 'lucide-react';
+import { User, ChevronDown, LogOut, KeyRound } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import {
   DropdownMenu,
@@ -39,7 +39,16 @@ export default function UserNavbar({ onNavigate, onLogout }: UserNavbarProps) {
           </div>
 
           {/* User Profile Menu */}
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => onNavigate('vault')}
+              className="h-11 text-muted-foreground hover:text-foreground"
+              aria-label="Mes identifiants"
+            >
+              <KeyRound className="w-5 h-5" strokeWidth={1.5} />
+              <span className="hidden md:inline text-sm">Mes identifiants</span>
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-11 flex items-center gap-2">
@@ -64,6 +73,10 @@ export default function UserNavbar({ onNavigate, onLogout }: UserNavbarProps) {
                 <DropdownMenuItem onClick={() => onNavigate('profile')} className="cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
                   <span>Mon profil</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onNavigate('vault')} className="cursor-pointer">
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  <span>Mes identifiants</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="cursor-pointer">

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=320" />
+    <title>Coffre SBEE</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="head">
+      <img src="icons/icon-32.png" width="24" height="24" alt="" />
+      <div>
+        <p class="eyebrow">SBEE</p>
+        <h1>Coffre d'identifiants</h1>
+      </div>
+    </header>
+
+    <main>
+      <section class="block" aria-labelledby="etat-titre">
+        <h2 id="etat-titre">État</h2>
+        <p id="status" class="status">Chargement...</p>
+        <button id="open-portal" type="button" class="btn secondary" hidden>Ouvrir le portail</button>
+      </section>
+
+      <section id="permission" class="block warn" hidden>
+        <p>L'extension n'a pas encore accès aux sites des applications.</p>
+        <button id="grant" type="button" class="btn secondary">Autoriser l'accès aux sites</button>
+      </section>
+
+      <section class="block" aria-labelledby="onglet-titre">
+        <h2 id="onglet-titre">Cet onglet</h2>
+        <p id="tab-app" class="muted">-</p>
+        <button id="fill" type="button" class="btn primary" disabled>Remplir maintenant</button>
+        <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <footer id="footer" class="foot"></footer>
+    <script src="popup.js"></script>
+  </body>
+</html>
