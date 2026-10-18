@@ -1,112 +1,103 @@
-// Génère des icônes PNG simples (16/32/48/128) : carré blanc, filet rouge
-// #ED1F24 à gauche et lettres « SB » en pixels. Ce n'est PAS le logo SBEE.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// Génère les icônes de l'extension et les visuels des boutiques à partir du logo
+// officiel SBEE (../public/images/logo.png, jamais redessiné) :
+// - icons/icon-{16,32,48,128}.png : logo centré, proportions conservées, carré à fond blanc, marge ~12 % ;
+// - store/assets/tuile-440x280.png : image de fiche (logo + nom de l'extension) ;
+// - store/assets/icone-300x300.png : icône de fiche Edge.
+// Dépendance de dev : sharp (chargée seulement ici, pas nécessaire à npm run build si les icônes existent).
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deflateSync } from 'node:zlib';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const LOGO = join(ROOT, '..', 'public', 'images', 'logo.png');
 export const ICON_SIZES = [16, 32, 48, 128];
+const MARGIN = 0.12;
+const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+const TRANSPARENT = { r: 255, g: 255, b: 255, alpha: 0 };
+const EXTENSION_NAME = "Coffre d'identifiants SBEE";
 
-const GLYPHS = {
-  S: ['.###.', '#...#', '#....', '.###.', '....#', '#...#', '.###.'],
-  B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
-};
-
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const td = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(td));
-  return Buffer.concat([len, td, crc]);
-}
-
-function png(size, pixels) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // profondeur
-  ihdr[9] = 6; // RGBA
-  const stride = size * 4 + 1;
-  const raw = Buffer.alloc(stride * size);
-  for (let y = 0; y < size; y++) {
-    raw[y * stride] = 0;
-    pixels.copy(raw, y * stride + 1, y * size * 4, (y + 1) * size * 4);
+async function loadSharp() {
+  try {
+    return (await import('sharp')).default;
+  } catch {
+    throw new Error('sharp est introuvable : lancez npm install dans extension/ avant npm run icons.');
   }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', deflateSync(raw)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
 }
 
-function draw(size) {
-  const px = Buffer.alloc(size * size * 4);
-  const set = (x, y, [r, g, b]) => {
-    if (x < 0 || y < 0 || x >= size || y >= size) return;
-    const i = (y * size + x) * 4;
-    px[i] = r;
-    px[i + 1] = g;
-    px[i + 2] = b;
-    px[i + 3] = 255;
-  };
-  const white = [255, 255, 255];
-  const red = [0xed, 0x1f, 0x24];
-  const ink = [0x11, 0x11, 0x11];
-  const grey = [0xc0, 0xc0, 0xc0];
-
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) set(x, y, white);
-  // contour gris fin (lisibilité sur fond clair)
-  if (size >= 32) {
-    for (let i = 0; i < size; i++) {
-      set(i, 0, grey);
-      set(i, size - 1, grey);
-      set(size - 1, i, grey);
-    }
-  }
-  // filet rouge à gauche
-  const bar = Math.max(2, Math.round(size / 10));
-  for (let y = 0; y < size; y++) for (let x = 0; x < bar; x++) set(x, y, red);
-
-  // lettres « SB » : 5 + 1 + 5 colonnes, 7 lignes
-  const avail = size - bar - Math.max(1, Math.round(size / 16)) * 2;
-  const scale = Math.max(1, Math.floor(avail / 11));
-  const w = 11 * scale;
-  const h = 7 * scale;
-  const x0 = bar + Math.floor((size - bar - w) / 2);
-  const y0 = Math.floor((size - h) / 2);
-  ['S', 'B'].forEach((letter, li) => {
-    GLYPHS[letter].forEach((row, gy) => {
-      [...row].forEach((c, gx) => {
-        if (c !== '#') return;
-        for (let dy = 0; dy < scale; dy++)
-          for (let dx = 0; dx < scale; dx++) set(x0 + (li * 6 + gx) * scale + dx, y0 + gy * scale + dy, ink);
-      });
-    });
-  });
-  return png(size, px);
+/** Logo redimensionné pour tenir dans une boîte w x h, sans déformation, fond transparent. */
+async function fittedLogo(sharp, w, h) {
+  return sharp(LOGO)
+    .resize({ width: w, height: h, fit: 'contain', background: TRANSPARENT, kernel: 'lanczos3' })
+    .png()
+    .toBuffer();
 }
 
-export function generateIcons(outDir = join(ROOT, 'icons')) {
-  mkdirSync(outDir, { recursive: true });
-  for (const s of ICON_SIZES) writeFileSync(join(outDir, `icon-${s}.png`), draw(s));
+/** Carré blanc de côté size, logo centré avec une marge de MARGIN sur chaque bord. */
+async function squareWithLogo(sharp, size) {
+  const margin = Math.max(1, Math.round(size * MARGIN));
+  const inner = size - 2 * margin;
+  const logo = await fittedLogo(sharp, inner, inner);
+  return sharp({ create: { width: size, height: size, channels: 4, background: WHITE } })
+    .composite([{ input: logo, left: margin, top: margin }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+function escapeXml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+
+/** Tuile 440 x 280 : fond blanc, logo à gauche, nom de l'extension en texte simple à droite. */
+async function storeTile(sharp) {
+  const W = 440;
+  const H = 280;
+  const logoH = 168;
+  const logoW = Math.round((logoH * 283) / 334);
+  const logoLeft = 40;
+  const logoTop = Math.round((H - logoH) / 2);
+  const logo = await fittedLogo(sharp, logoW, logoH);
+  const textX = logoLeft + logoW + 28;
+  const font = "Poppins, 'Segoe UI', Arial, sans-serif";
+  // EXTENSION_NAME sur trois lignes : « Coffre », « d'identifiants », « SBEE ».
+  const [l1, l2, l3] = ['Coffre', "d'identifiants", 'SBEE'];
+  if (`${l1} ${l2} ${l3}` !== EXTENSION_NAME) throw new Error('Nom de la tuile à mettre à jour.');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+  <text x="${textX}" y="128" font-family="${font}" font-size="24" font-weight="600" fill="#111111">${escapeXml(l1)}</text>
+  <text x="${textX}" y="158" font-family="${font}" font-size="24" font-weight="600" fill="#111111">${escapeXml(l2)}</text>
+  <text x="${textX}" y="188" font-family="${font}" font-size="24" font-weight="700" fill="#ED1F24">${escapeXml(l3)}</text>
+</svg>`;
+  return sharp({ create: { width: W, height: H, channels: 4, background: WHITE } })
+    .composite([
+      { input: logo, left: logoLeft, top: logoTop },
+      { input: Buffer.from(svg), left: 0, top: 0 },
+    ])
+    .flatten({ background: WHITE })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+async function write(sharp, buffer, file) {
+  mkdirSync(dirname(file), { recursive: true });
+  await sharp(buffer).toFile(file);
+  return file;
+}
+
+export async function generateIcons(outDir = join(ROOT, 'icons')) {
+  if (!existsSync(LOGO)) throw new Error(`Logo officiel introuvable : ${LOGO}`);
+  const sharp = await loadSharp();
+  for (const s of ICON_SIZES) await write(sharp, await squareWithLogo(sharp, s), join(outDir, `icon-${s}.png`));
+  return outDir;
+}
+
+export async function generateStoreAssets(outDir = join(ROOT, 'store', 'assets')) {
+  if (!existsSync(LOGO)) throw new Error(`Logo officiel introuvable : ${LOGO}`);
+  const sharp = await loadSharp();
+  await write(sharp, await storeTile(sharp), join(outDir, 'tuile-440x280.png'));
+  await write(sharp, await squareWithLogo(sharp, 300), join(outDir, 'icone-300x300.png'));
   return outDir;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  console.log(`Icônes générées dans ${generateIcons()}`);
+  console.log(`Icônes générées dans ${await generateIcons()}`);
+  console.log(`Visuels des boutiques générés dans ${await generateStoreAssets()}`);
 }

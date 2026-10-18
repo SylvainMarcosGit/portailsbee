@@ -12,6 +12,7 @@ import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { applicationsApi } from '@/services/api';
+import { openApplication } from '@/services/openApplication';
 import { toast } from 'sonner';
 
 type AppCategory = string;
@@ -54,20 +55,7 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  const handleAppClick = async (app: Application) => {
-    // Ouverture synchrone pour éviter le blocage des popups
-    const w = window.open('', '_blank');
-    try {
-      const res = await applicationsApi.accessApp(app.id);
-      if (w) {
-        w.opener = null;
-        w.location.href = res.data.url;
-      }
-    } catch (error: any) {
-      w?.close();
-      toast.error(error?.response?.data?.message || "Impossible d'ouvrir cette application.");
-    }
-  };
+  const handleAppClick = (app: Application) => openApplication(app.id);
 
   // Récupérer les catégories uniques disponibles
   const availableCategories: AppCategory[] = [

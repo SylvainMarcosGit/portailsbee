@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Eye, EyeOff, KeyRound, LayoutGrid, Loader2, Pencil, Plus, Puzzle, Trash2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Eye, EyeOff, KeyRound, LayoutGrid, Loader2, Pencil, Plus, Puzzle, Trash2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { vaultApi, IDENTIFIER_TYPE_LABELS, type VaultApplication } from '@/services/api';
 import { useExtensionStatus } from '@/services/extensionBridge';
+import { openApplication } from '@/services/openApplication';
 import RequiredMark from '@/app/components/RequiredMark';
 
 interface VaultPageProps {
@@ -267,7 +268,15 @@ export default function VaultPage({ onBack, onInstallExtension }: VaultPageProps
                             <LayoutGrid className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
                           )}
                         </div>
-                        <p className="font-medium text-foreground truncate">{app.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => openApplication(app.application_id)}
+                          title={`Ouvrir ${app.name} dans un nouvel onglet`}
+                          className="group inline-flex items-center gap-1.5 min-h-11 font-medium text-foreground truncate underline-offset-4 hover:underline hover:text-sbee-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors duration-[120ms] cursor-pointer"
+                        >
+                          <span className="truncate">{app.name}</span>
+                          <ExternalLink className="w-4 h-4 flex-shrink-0 text-muted-foreground group-hover:text-sbee-red" strokeWidth={1.5} aria-hidden="true" />
+                        </button>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{app.category || '-'}</td>

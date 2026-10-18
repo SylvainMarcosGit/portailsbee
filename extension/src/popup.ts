@@ -38,7 +38,11 @@ async function render(): Promise<void> {
     return;
   }
 
-  $('footer').textContent = `Version ${state.version} - ${state.portal_origin}`;
+  // Origine principale en premier ; les autres origines autorisées sont indiquées par leur nombre.
+  const [main, ...others] = state.portal_origins;
+  const extra = others.length > 0 ? ` (+${others.length} autre${others.length > 1 ? 's' : ''})` : '';
+  $('footer').textContent = `Version ${state.version} - ${main ?? ''}${extra}`;
+  $('footer').title = state.portal_origins.join(', ');
 
   if (state.connected && state.user) {
     status.className = 'status ok';
@@ -66,6 +70,11 @@ async function render(): Promise<void> {
 
 $('open-portal').addEventListener('click', () => {
   void bg({ type: 'open_portal' }).then(() => window.close());
+});
+
+$('privacy').addEventListener('click', (event) => {
+  event.preventDefault();
+  void bg({ type: 'open_privacy' }).then(() => window.close());
 });
 
 $('grant').addEventListener('click', () => {

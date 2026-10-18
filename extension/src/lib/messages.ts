@@ -1,7 +1,7 @@
 // Types partagés : pont portail (window.postMessage) et messages internes
 // (content scripts / popup <-> background via runtime.sendMessage).
 
-export type SsoMode = 'none' | 'fill' | 'fill_submit';
+export type SsoMode = 'none' | 'fill' | 'fill_submit' | 'silent';
 export type IdentifierType = 'email' | 'matricule' | 'username' | 'autre';
 
 /** Application telle que renvoyée par GET /vault/ext/config. */
@@ -82,11 +82,15 @@ export type BgRequest =
   | { type: 'capture'; application_id: number; url: string; kind: 'identifier'; login_identifier: string }
   | { type: 'capture'; application_id: number; url: string; kind: 'full'; login_identifier: string | null; secret: string }
   | { type: 'capture_commit' }
+  | { type: 'guard_signal'; result: GuardResult }
+  // content-guard
+  | { type: 'guard_match'; url: string }
   | { type: 'capture_discard' }
   // popup
   | { type: 'popup_state' }
   | { type: 'popup_fill' }
-  | { type: 'open_portal' };
+  | { type: 'open_portal' }
+  | { type: 'open_privacy' };
 
 /** Application transmise au content script (sans secret). */
 export type MatchedApp = Omit<ExtApplication, 'login_url_pattern'>;
@@ -101,7 +105,8 @@ export interface MatchResponse {
 export interface PopupState {
   connected: boolean;
   user: ExtUser | null;
-  portal_origin: string;
+  /** Origines autorisées ; la première est l'origine principale. */
+  portal_origins: string[];
   version: string;
   tab_app: { name: string; has_credential: boolean } | null;
 }
@@ -113,6 +118,21 @@ export interface SimpleResult {
   final?: boolean;
 }
 
+/**
+ * Résultat signalé par content-app à l'écran « Connexion invisible » du cadre principal
+ * (relayé par le background) : jamais d'identifiant ni de secret.
+ */
+export type GuardResult = 'filled' | 'failed_credentials' | 'failed_manual';
+
+/** Réponse à guard_match (sans secret). */
+export interface GuardMatchResponse {
+  /** Masquer la page : mode silent, identifiant enregistré, pas de soumission auto récente. */
+  active: boolean;
+  app_name?: string;
+  /** L'adresse correspond au motif de connexion d'une application active. */
+  on_login_page: boolean;
+}
+
 export type RevealResponse = { ok: true; creds: RevealResult } | { ok: false };
 
 // Messages du background vers les content scripts
@@ -120,4 +140,5 @@ export type TabRequest =
   | { type: 'show_prompt'; prompt: PromptInfo }
   | { type: 'show_notice'; message: string }
   | { type: 'fill_now' }
+  | { type: 'guard_signal'; result: GuardResult }
   | { type: 'request_token' };

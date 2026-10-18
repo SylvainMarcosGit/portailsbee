@@ -5,7 +5,9 @@
 import browser from 'webextension-polyfill';
 import { detectLoginForm, type LoginForm } from './lib/detect';
 import { fillForm, readSecret, submitForm } from './lib/fill';
-import type { BgRequest, FillStep, MatchResponse, MatchedApp, RevealResponse, SimpleResult, TabRequest } from './lib/messages';
+import { autoSubmitEnabled } from './lib/guard';
+import type { BgRequest, FillStep, GuardResult, MatchResponse, MatchedApp, RevealResponse, SimpleResult, TabRequest } from './lib/messages';
+import { GUARD_REVEALED_EVENT, isPageHidden } from './lib/overlay';
 import { showNotice, showPrompt } from './lib/prompt';
 
 const OBSERVE_MS = 10_000;
@@ -33,8 +35,21 @@ function displayPrompt(prompt: Parameters<typeof showPrompt>[0]): void {
       onSave: () => bg<SimpleResult>({ type: 'capture_commit' }),
       onDismiss: () => void bg({ type: 'capture_discard' }).catch(() => undefined),
     });
+  // Écran « Connexion invisible » actif : la proposition attend qu'il soit retiré.
+  if (isPageHidden(document)) {
+    window.addEventListener(GUARD_REVEALED_EVENT, () => displayPrompt(prompt), { once: true });
+    return;
+  }
   if (document.body) render();
   else window.addEventListener('DOMContentLoaded', render, { once: true });
+}
+
+// ---------------------------------------------------------------------------
+// Écran « Connexion invisible » (content-guard, cadre principal), via le background
+
+function signalGuard(result: GuardResult): void {
+  if (app?.sso_mode !== 'silent' || !app.has_credential) return;
+  void bg({ type: 'guard_signal', result }).catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +60,7 @@ async function attemptFill(manual: boolean): Promise<boolean> {
   if (!current || !current.has_credential) return false;
   const f = detectLoginForm(document, current);
   if (!f) return false;
-  const autoSubmit = current.sso_mode === 'fill_submit';
+  const autoSubmit = autoSubmitEnabled(current.sso_mode);
 
   if (f.step === 'identifier') {
     if (identifierDone && !manual) return false;
@@ -62,7 +77,10 @@ async function attemptFill(manual: boolean): Promise<boolean> {
   passwordDone = true;
   identifierDone = true;
   const res = await bg<RevealResponse>({ type: 'reveal', application_id: current.application_id, url: window.location.href }).catch(() => null);
-  if (!res?.ok) return false;
+  if (!res?.ok) {
+    signalGuard('failed_credentials');
+    return false;
+  }
   const creds = res.creds;
   // Le formulaire a pu être remplacé pendant l'appel réseau.
   const g = f.password?.isConnected ? f : detectLoginForm(document, current);
@@ -76,10 +94,13 @@ async function attemptFill(manual: boolean): Promise<boolean> {
 async function submitIfAllowed(f: LoginForm, step: FillStep, manual: boolean): Promise<void> {
   // Garde-fou : si la même étape a déjà été soumise automatiquement il y a moins de 30 s
   // (identifiants refusés, la page revient), on remplit sans valider.
-  if (!manual && recentAutoSubmit.includes(step)) return;
+  if (!manual && recentAutoSubmit.includes(step)) {
+    signalGuard('failed_credentials');
+    return;
+  }
   if (!app) return;
   await bg({ type: 'mark_autosubmit', application_id: app.application_id, step }).catch(() => undefined);
-  submitForm(f, app.submit_selector);
+  if (submitForm(f, app.submit_selector)) signalGuard('filled');
 }
 
 let observer: MutationObserver | null = null;
@@ -90,7 +111,7 @@ let scheduled = false;
 function observe(): void {
   if (!app || passwordDone) return;
   if (observeTimer) clearTimeout(observeTimer);
-  observeTimer = setTimeout(stopObserving, OBSERVE_MS);
+  observeTimer = setTimeout(onObserveTimeout, OBSERVE_MS);
   if (observer) return;
   observer = new MutationObserver(() => {
     if (scheduled) return;
@@ -105,6 +126,12 @@ function observe(): void {
     }, 150);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['type', 'style', 'class', 'hidden'] });
+}
+
+/** Fin de l'observation sans formulaire rempli : l'agent termine lui-même. */
+function onObserveTimeout(): void {
+  stopObserving();
+  if (!passwordDone) signalGuard('failed_manual');
 }
 
 function stopObserving(): void {

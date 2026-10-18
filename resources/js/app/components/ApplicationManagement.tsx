@@ -549,6 +549,11 @@ export default function ApplicationManagement({ onBack, onManageCategories }: Ap
               </option>
             ))}
           </select>
+          {formData.sso_mode === 'silent' && (
+            <p className="text-xs text-muted-foreground">
+              La page de connexion est masquée : l'agent arrive directement dans l'application. Si la connexion échoue, la page s'affiche avec un message.
+            </p>
+          )}
         </div>
 
         {formData.sso_mode !== 'none' && (

@@ -30,7 +30,7 @@ class Application extends Model
     /**
      * Modes de connexion par l'extension SBEE : aucun, remplissage, remplissage + validation
      */
-    public const SSO_MODES = ['none', 'fill', 'fill_submit'];
+    public const SSO_MODES = ['none', 'fill', 'fill_submit', 'silent'];
 
     /**
      * Nature de l'identifiant attendu par l'application

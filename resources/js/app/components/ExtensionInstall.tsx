@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, CheckCircle, Copy, Download, Info, Puzzle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Copy, Download, ExternalLink, Info, Puzzle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
 import { useExtensionStatus } from '@/services/extensionBridge';
@@ -29,6 +29,27 @@ const EXTENSIONS_URL: Record<'edge' | 'chrome' | 'opera', string> = {
   chrome: 'chrome://extensions',
   opera: 'opera://extensions',
 };
+
+/**
+ * Liens des fiches publiées dans les boutiques (null tant que l'extension n'y est pas publiée).
+ * À renseigner par la DSI après publication (voir extension/store/PUBLICATION.md) : si un lien existe
+ * pour le navigateur choisi, la page propose « Installer depuis la boutique » au lieu des étapes manuelles.
+ */
+const STORE_LINKS: Record<'edge' | 'firefox' | 'opera' | 'chrome', string | null> = {
+  edge: null,
+  firefox: null,
+  opera: null,
+  chrome: null,
+};
+
+const STORE_NAMES: Record<keyof typeof STORE_LINKS, string> = {
+  edge: 'Microsoft Edge Add-ons',
+  firefox: 'Modules complémentaires Firefox',
+  opera: 'Opera Add-ons',
+  chrome: 'Chrome Web Store',
+};
+
+const PRIVACY_URL = '/extension/confidentialite';
 
 const CHROMIUM_PACKAGE = '/extension/sbee-extension-chromium.zip';
 const FIREFOX_PACKAGE = '/extension/sbee-extension-firefox.zip';
@@ -98,6 +119,7 @@ export default function ExtensionInstall({ onBack, onOpenVault }: ExtensionInsta
   const isChromium = browser === 'edge' || browser === 'chrome' || browser === 'opera';
   const packageUrl = browser === 'firefox' ? FIREFOX_PACKAGE : CHROMIUM_PACKAGE;
   const packageName = packageUrl.split('/').pop() || '';
+  const storeLink = browser === 'other' ? null : STORE_LINKS[browser];
 
   const chromiumSteps: ReactNode[] = isChromium
     ? [
@@ -215,34 +237,66 @@ export default function ExtensionInstall({ onBack, onOpenVault }: ExtensionInsta
           </div>
         ) : (
           <>
-            <div className="border-t border-border pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <Puzzle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" strokeWidth={1.5} />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Paquet pour {BROWSER_NAMES[browser]}</p>
-                  <p className="text-xs text-muted-foreground mt-1 num">{packageName}</p>
+            {storeLink ? (
+              <div className="border-t border-border pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Puzzle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Disponible sur {STORE_NAMES[browser as keyof typeof STORE_LINKS]}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cliquez sur « Ajouter » dans la boutique, puis revenez sur cette page et actualisez-la.
+                    </p>
+                  </div>
                 </div>
+                <Button asChild size="lg" className="sm:self-center">
+                  <a href={storeLink} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-4 h-4" />
+                    Installer depuis la boutique
+                  </a>
+                </Button>
               </div>
-              <Button asChild size="lg" className="sm:self-center">
-                <a href={packageUrl} download>
-                  <Download className="w-4 h-4" />
-                  Télécharger l'extension
-                </a>
-              </Button>
-            </div>
+            ) : (
+              <>
+                <div className="border-t border-border pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <Puzzle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Paquet pour {BROWSER_NAMES[browser]}</p>
+                      <p className="text-xs text-muted-foreground mt-1 num">{packageName}</p>
+                    </div>
+                  </div>
+                  <Button asChild size="lg" className="sm:self-center">
+                    <a href={packageUrl} download>
+                      <Download className="w-4 h-4" />
+                      Télécharger l'extension
+                    </a>
+                  </Button>
+                </div>
 
-            <div className="border-t border-border pt-6 space-y-4">
-              <h2 className="text-base font-semibold text-foreground">Étapes d'installation</h2>
-              <Steps steps={browser === 'firefox' ? firefoxSteps : chromiumSteps} />
-            </div>
+                <div className="border-t border-border pt-6 space-y-4">
+                  <h2 className="text-base font-semibold text-foreground">Étapes d'installation</h2>
+                  <Steps steps={browser === 'firefox' ? firefoxSteps : chromiumSteps} />
+                </div>
 
-            <p className="text-xs text-muted-foreground border-t border-border pt-4">
-              {browser === 'firefox'
-                ? "Le module temporaire est retiré à la fermeture de Firefox : refaites ces étapes au prochain démarrage, en attendant le paquet signé."
-                : "Installation provisoire en mode développeur, en attendant le déploiement automatique de l'extension par la DSI."}
-            </p>
+                <p className="text-xs text-muted-foreground border-t border-border pt-4">
+                  {browser === 'firefox'
+                    ? "Le module temporaire est retiré à la fermeture de Firefox : refaites ces étapes au prochain démarrage, en attendant le paquet signé."
+                    : "Installation provisoire en mode développeur, en attendant le déploiement automatique de l'extension par la DSI."}
+                </p>
+              </>
+            )}
           </>
         )}
+
+        <p className="text-xs text-muted-foreground border-t border-border pt-4 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
+          <span>
+            Données traitées, permissions et droits :{' '}
+            <a href={PRIVACY_URL} target="_blank" rel="noopener" className="underline underline-offset-2 text-foreground hover:text-muted-foreground">
+              politique de confidentialité de l'extension
+            </a>
+          </span>
+        </p>
       </div>
     </div>
   );

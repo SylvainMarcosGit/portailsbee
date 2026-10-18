@@ -44,6 +44,11 @@ export interface PromptHandlers {
   onDismiss: () => void;
 }
 
+/** Une proposition ou un message est déjà affiché. */
+export function hasPrompt(doc: Document = document): boolean {
+  return !!doc.getElementById(HOST_ID);
+}
+
 export function removePrompt(doc: Document = document): void {
   doc.getElementById(HOST_ID)?.remove();
 }

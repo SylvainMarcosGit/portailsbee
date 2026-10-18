@@ -5,6 +5,8 @@ import browser, { type Runtime } from 'webextension-polyfill';
 import * as api from './lib/api';
 import { ApiError } from './lib/api';
 import { findBestMatch, matchUrl } from './lib/glob';
+import { AUTOSUBMIT_GUARD_MS, decideGuard, recentAutoSubmitSteps, type AutoSubmitMark } from './lib/guard';
+import { isAllowedUrl, isValidApiBase } from './lib/origins';
 import { resolvePageUrl } from './lib/url';
 import type {
   AuthState,
@@ -12,6 +14,8 @@ import type {
   ExtApplication,
   ExtConfig,
   FillStep,
+  GuardMatchResponse,
+  GuardResult,
   MatchResponse,
   MatchedApp,
   PopupState,
@@ -22,11 +26,12 @@ import type {
   TabRequest,
 } from './lib/messages';
 
-const PORTAL_ORIGIN = __PORTAL_ORIGIN__;
+const PORTAL_ORIGINS = __PORTAL_ORIGINS__;
+/** Origine principale : bouton « Ouvrir le portail » et page de confidentialité. */
+const MAIN_PORTAL_ORIGIN = PORTAL_ORIGINS[0] ?? '';
 const CONFIG_ALARM = 'sbee-refresh-config';
 const CLEANUP_ALARM = 'sbee-cleanup';
 const CAPTURE_TTL_MS = 60_000;
-const AUTOSUBMIT_GUARD_MS = 30_000;
 
 const session = browser.storage.session;
 
@@ -43,11 +48,6 @@ interface PartialIdentifier {
   application_id: number;
   login_identifier: string;
   at: number;
-}
-
-interface AutoSubmitMark {
-  application_id: number;
-  steps: { step: FillStep; at: number }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -114,12 +114,7 @@ async function requestTokenFromPortal(): Promise<void> {
 }
 
 function isPortalUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  try {
-    return new URL(url).origin === PORTAL_ORIGIN;
-  } catch {
-    return false;
-  }
+  return isAllowedUrl(url, PORTAL_ORIGINS);
 }
 
 /** Exécute un appel API ; 401/403 -> purge + « Non connecté » + demande de jeton. */
@@ -281,6 +276,14 @@ function effectiveUrl(claimed: string | undefined, sender: Runtime.MessageSender
   return resolvePageUrl(claimed, sender.url);
 }
 
+/** Application active (mode différent de « none ») dont le motif correspond à l'adresse. */
+function matchApp(config: ExtConfig, url: string): ExtApplication | null {
+  return findBestMatch(
+    config.applications.filter((a) => a.sso_mode !== 'none'),
+    url,
+  );
+}
+
 async function handleMatch(claimedUrl: string, sender: Runtime.MessageSender): Promise<MatchResponse> {
   const empty: MatchResponse = { app: null, pending: null, recent_autosubmit: [] };
   const tabId = sender.tab?.id;
@@ -296,18 +299,36 @@ async function handleMatch(claimedUrl: string, sender: Runtime.MessageSender): P
 
   const config = await getConfig();
   if (!config) return { ...empty, pending };
-  const app = findBestMatch(
-    config.applications.filter((a) => a.sso_mode !== 'none'),
-    url,
-  );
+  const app = matchApp(config, url);
   if (!app) return { ...empty, pending };
 
   const mark = await getItem<AutoSubmitMark>(autoKey(tabId));
-  const recent =
-    mark && mark.application_id === app.application_id
-      ? mark.steps.filter((s) => Date.now() - s.at <= AUTOSUBMIT_GUARD_MS).map((s) => s.step)
-      : [];
-  return { app: toMatched(app), pending, recent_autosubmit: recent };
+  return { app: toMatched(app), pending, recent_autosubmit: recentAutoSubmitSteps(mark, app.application_id, Date.now()) };
+}
+
+/** Écran « Connexion invisible » : réponse légère au script du cadre principal, sans secret. */
+async function handleGuardMatch(claimedUrl: string, sender: Runtime.MessageSender): Promise<GuardMatchResponse> {
+  const none: GuardMatchResponse = { active: false, on_login_page: false };
+  const tabId = sender.tab?.id;
+  if (tabId === undefined || sender.frameId !== 0) return none;
+  const url = effectiveUrl(claimedUrl, sender);
+  if (!url) return none;
+  const config = await getConfig();
+  if (!config) return none;
+  const app = matchApp(config, url);
+  const mark = app ? await getItem<AutoSubmitMark>(autoKey(tabId)) : undefined;
+  return decideGuard(app, mark, Date.now());
+}
+
+const GUARD_RESULTS: readonly GuardResult[] = ['filled', 'failed_credentials', 'failed_manual'];
+
+/** Relaie le résultat de content-app (tout cadre) à l'écran du cadre principal. */
+async function relayGuardSignal(result: unknown, sender: Runtime.MessageSender): Promise<SimpleResult> {
+  const tabId = sender.tab?.id;
+  if (tabId === undefined || !GUARD_RESULTS.includes(result as GuardResult)) return { ok: false };
+  const msg: TabRequest = { type: 'guard_signal', result: result as GuardResult };
+  await browser.tabs.sendMessage(tabId, msg, { frameId: 0 }).catch(() => undefined);
+  return { ok: true };
 }
 
 async function handleReveal(applicationId: number, claimedUrl: string | undefined, sender: Runtime.MessageSender): Promise<RevealResponse> {
@@ -344,7 +365,7 @@ async function handlePortalToken(msg: Extract<BgRequest, { type: 'portal_token' 
   if (!isPortalUrl(sender.url) || sender.frameId !== 0) return { ok: false };
   const { token, expires_at, api_base } = msg;
   if (typeof token !== 'string' || !token || typeof expires_at !== 'string' || typeof api_base !== 'string') return { ok: false };
-  if (!api_base.startsWith(`${PORTAL_ORIGIN}/`) || !isPortalUrl(api_base)) return { ok: false };
+  if (!isValidApiBase(api_base, PORTAL_ORIGINS)) return { ok: false };
   await session.clear();
   await setItem('auth', { token, expires_at, api_base } satisfies AuthState);
   await refreshConfig();
@@ -368,14 +389,11 @@ async function popupState(): Promise<PopupState> {
   if (config) {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
-      const app = findBestMatch(
-        config.applications.filter((a) => a.sso_mode !== 'none'),
-        tab.url,
-      );
+      const app = matchApp(config, tab.url);
       if (app) tabApp = { name: app.name, has_credential: app.has_credential };
     }
   }
-  return { connected: !!config, user: config?.user ?? null, portal_origin: PORTAL_ORIGIN, version: __VERSION__, tab_app: tabApp };
+  return { connected: !!config, user: config?.user ?? null, portal_origins: [...PORTAL_ORIGINS], version: __VERSION__, tab_app: tabApp };
 }
 
 async function popupFill(): Promise<SimpleResult> {
@@ -413,6 +431,10 @@ browser.runtime.onMessage.addListener((raw: unknown, sender: Runtime.MessageSend
       return getAuth().then((a) => ({ ok: !!a }) satisfies SimpleResult);
     case 'match':
       return handleMatch(msg.url, sender);
+    case 'guard_match':
+      return handleGuardMatch(msg.url, sender);
+    case 'guard_signal':
+      return relayGuardSignal(msg.result, sender);
     case 'reveal':
       return handleReveal(msg.application_id, msg.url, sender);
     case 'mark_autosubmit':
@@ -428,7 +450,9 @@ browser.runtime.onMessage.addListener((raw: unknown, sender: Runtime.MessageSend
     case 'popup_fill':
       return isFromPopup(sender) ? popupFill() : undefined;
     case 'open_portal':
-      return isFromPopup(sender) ? browser.tabs.create({ url: `${PORTAL_ORIGIN}/` }).then(() => ({ ok: true })) : undefined;
+      return isFromPopup(sender) ? browser.tabs.create({ url: `${MAIN_PORTAL_ORIGIN}/` }).then(() => ({ ok: true })) : undefined;
+    case 'open_privacy':
+      return isFromPopup(sender) ? browser.tabs.create({ url: `${MAIN_PORTAL_ORIGIN}/extension/confidentialite` }).then(() => ({ ok: true })) : undefined;
     default:
       return undefined;
   }

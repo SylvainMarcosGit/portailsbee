@@ -63,13 +63,14 @@ export const profileApi = {
 };
 
 // Connexion automatique (extension SBEE)
-export type SsoMode = 'none' | 'fill' | 'fill_submit';
+export type SsoMode = 'none' | 'fill' | 'fill_submit' | 'silent';
 export type IdentifierType = 'email' | 'matricule' | 'username' | 'autre';
 
 export const SSO_MODE_LABELS: Record<SsoMode, string> = {
   none: 'Désactivée',
   fill: 'Remplir les champs',
   fill_submit: 'Remplir et valider',
+  silent: 'Connexion invisible',
 };
 
 export const IDENTIFIER_TYPE_LABELS: Record<IdentifierType, string> = {

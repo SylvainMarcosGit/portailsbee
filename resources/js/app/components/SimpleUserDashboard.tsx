@@ -12,6 +12,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { applicationsApi, type SsoMode } from '@/services/api';
+import { openApplication } from '@/services/openApplication';
 import { useExtensionStatus } from '@/services/extensionBridge';
 import { toast } from 'sonner';
 
@@ -63,20 +64,7 @@ export default function SimpleUserDashboard({ onInstallExtension }: SimpleUserDa
     fetchApps();
   }, []);
 
-  const handleAppClick = async (app: Application) => {
-    // Ouverture synchrone pour éviter le blocage des popups
-    const w = window.open('', '_blank');
-    try {
-      const res = await applicationsApi.accessApp(app.id);
-      if (w) {
-        w.opener = null;
-        w.location.href = res.data.url;
-      }
-    } catch (error: any) {
-      w?.close();
-      toast.error(error?.response?.data?.message || "Impossible d'ouvrir cette application.");
-    }
-  };
+  const handleAppClick = (app: Application) => openApplication(app.id);
 
   // Catégories distinctes présentes dans les applications chargées, triées par nom
   const categories: AppCategory[] = [

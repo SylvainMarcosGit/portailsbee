@@ -29,7 +29,7 @@ class StoreApplicationRequest extends FormRequest
             'role_ids' => ['nullable', 'array'],
             'role_ids.*' => ['exists:roles,id'],
             'sso_mode' => ['nullable', Rule::in(Application::SSO_MODES)],
-            'login_url_pattern' => ['nullable', 'string', 'max:500', 'required_if:sso_mode,fill,fill_submit'],
+            'login_url_pattern' => ['nullable', 'string', 'max:500', 'required_if:sso_mode,fill,fill_submit,silent'],
             'identifier_type' => ['nullable', Rule::in(Application::IDENTIFIER_TYPES)],
             'username_selector' => ['nullable', 'string', 'max:255'],
             'password_selector' => ['nullable', 'string', 'max:255'],

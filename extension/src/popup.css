@@ -94,8 +94,16 @@ main { padding: 8px 16px; }
 .feedback.error { color: #B00020; }
 
 .foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 16px 12px;
   font-size: 11px;
   color: var(--texte-2);
   background: var(--fond-2);
 }
+.foot-info { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot-link { flex-shrink: 0; color: var(--texte); text-decoration: underline; }
+.foot-link:hover { color: var(--rouge); }
+.foot-link:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }

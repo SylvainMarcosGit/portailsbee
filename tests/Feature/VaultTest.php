@@ -502,6 +502,31 @@ class VaultTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_mode_connexion_invisible_accepte_et_transmis_a_l_extension(): void
+    {
+        $token = $this->portalToken($this->admin);
+
+        // Comme les autres modes actifs : l'adresse de la page de connexion est obligatoire
+        $this->api('PUT', "/api/admin/applications/{$this->appFill->id}", $token, [
+            'sso_mode' => 'silent',
+            'login_url_pattern' => '',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['login_url_pattern']);
+
+        $this->api('PUT', "/api/admin/applications/{$this->appFill->id}", $token, ['sso_mode' => 'silent'])
+            ->assertOk()
+            ->assertJsonPath('application.sso_mode', 'silent');
+
+        $this->storeCredential($this->agent, $this->appFill->fresh(), 'agent', 'Secret');
+
+        $this->api('GET', '/api/vault/ext/config', $this->extensionToken($this->agent))
+            ->assertOk()
+            ->assertJsonPath('applications.0.application_id', $this->appFill->id)
+            ->assertJsonPath('applications.0.sso_mode', 'silent')
+            ->assertJsonPath('applications.0.has_credential', true);
+    }
+
     public function test_admin_enregistre_les_champs_sso(): void
     {
         $token = $this->portalToken($this->admin);

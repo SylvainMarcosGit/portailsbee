@@ -1,14 +1,18 @@
-// Content script injecté uniquement sur PORTAL_ORIGIN/* : pont window.postMessage
+// Content script injecté sur les origines du portail (PORTAL_ORIGINS) : pont window.postMessage
 // entre la page du portail et le background de l'extension.
 
 import browser from 'webextension-polyfill';
+import { isAllowedOrigin, isValidApiBase } from './lib/origins';
 import { BRIDGE_EXTENSION, BRIDGE_PORTAIL, type BgRequest, type ExtensionToPortail, type SimpleResult, type TabRequest } from './lib/messages';
 
-const PORTAL_ORIGIN = __PORTAL_ORIGIN__;
+const PORTAL_ORIGINS = __PORTAL_ORIGINS__;
+// Origine de cette page ; le script ne s'active que si elle fait partie de la liste
+// (le motif Firefox ne porte pas le port : le contrôle exact se fait ici).
+const PAGE_ORIGIN = window.location.origin;
 
 function post(msg: ExtensionToPortail): void {
-  // Toujours ciblé sur l'origine du portail, jamais « * ».
-  window.postMessage(msg, PORTAL_ORIGIN);
+  // Toujours ciblé sur l'origine (autorisée) de la page du portail, jamais « * ».
+  window.postMessage(msg, PAGE_ORIGIN);
 }
 
 const INSTANCE_KEY = 'instance_id';
@@ -36,16 +40,11 @@ function bg(msg: BgRequest): Promise<unknown> {
 }
 
 function validApiBase(apiBase: unknown): apiBase is string {
-  if (typeof apiBase !== 'string' || !apiBase.startsWith(`${PORTAL_ORIGIN}/`)) return false;
-  try {
-    return new URL(apiBase).origin === PORTAL_ORIGIN;
-  } catch {
-    return false;
-  }
+  return isValidApiBase(apiBase, PORTAL_ORIGINS);
 }
 
 function onMessage(event: MessageEvent): void {
-  if (event.source !== window || event.origin !== PORTAL_ORIGIN) return;
+  if (event.source !== window || event.origin !== PAGE_ORIGIN || !isAllowedOrigin(event.origin, PORTAL_ORIGINS)) return;
   const data: unknown = event.data;
   if (!data || typeof data !== 'object') return;
   const d = data as Record<string, unknown>;
@@ -73,7 +72,7 @@ function onMessage(event: MessageEvent): void {
   }
 }
 
-if (window.location.origin === PORTAL_ORIGIN && window.top === window) {
+if (isAllowedOrigin(PAGE_ORIGIN, PORTAL_ORIGINS) && window.top === window) {
   window.addEventListener('message', onMessage);
 
   browser.runtime.onMessage.addListener((raw: unknown) => {
